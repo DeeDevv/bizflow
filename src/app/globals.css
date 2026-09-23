@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+
+  /* Brand — indigo */
+  --color-brand-50: oklch(0.962 0.018 272.314);
+  --color-brand-100: oklch(0.93 0.034 272.788);
+  --color-brand-200: oklch(0.87 0.065 274.039);
+  --color-brand-300: oklch(0.785 0.115 274.713);
+  --color-brand-400: oklch(0.673 0.182 276.935);
+  --color-brand-500: oklch(0.585 0.233 277.117);
+  --color-brand-600: oklch(0.511 0.262 276.966);
+  --color-brand-700: oklch(0.457 0.24 277.023);
+  --color-brand-800: oklch(0.398 0.195 277.366);
+  --color-brand-900: oklch(0.359 0.144 278.697);
+
+  /* Neutrals — zinc */
+  --color-surface: #ffffff;
+  --color-canvas: oklch(0.985 0.001 286.375); /* zinc-50 */
+  --color-ink: oklch(0.141 0.005 285.823); /* zinc-950 */
+  --color-muted: oklch(0.552 0.016 285.938); /* zinc-500 */
+
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.04), 0 1px 3px 0 rgb(0 0 0 / 0.06);
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-canvas font-sans text-ink antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Thin, unobtrusive scrollbars for the dashboard shell */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: theme(--color-zinc-300) transparent;
+}
+
+/* Simple entrance animation for cards */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-rise-in {
+  animation: rise-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Splash screen: a soft breathing ring behind the logo */
+@keyframes splash-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+.animate-splash-pulse {
+  animation: splash-pulse 2s ease-in-out infinite;
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise-in,
+  .animate-splash-pulse {
+    animation: none;
+  }
+}
+
+/* Printing an invoice: hide the app chrome, show only the document.
+   Used by the Print and Save-as-PDF actions on the invoice page. */
+@media print {
+  aside,
+  header,
+  .no-print {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  body {
+    background: white !important;
+  }
+}
