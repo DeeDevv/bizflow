@@ -1,19 +1,32 @@
 # BizFlow — Business Management SaaS Dashboard
 
-A modern, frontend-only business management dashboard built with **Next.js (App Router)**,
-**TypeScript**, and **Tailwind CSS v4**.
+A modern business management dashboard built with **Next.js (App Router)**,
+**TypeScript**, **Tailwind CSS v4**, and **Supabase** (Postgres + Auth + RLS).
 
 Design principle: **simple enough that a first-time user can understand what to do
-without being trained.** No backend, auth, or payments yet.
+without being trained.**
 
 ## Getting started
 
 ```bash
 npm install
-npm run dev        # http://localhost:3000 → redirects to /dashboard
+cp .env.example .env.local   # then fill in your Supabase URL + publishable key
+npm run dev                  # http://localhost:3000 → redirects to /dashboard
 ```
 
 > Note: if Turbopack is unavailable on your platform, use `npm run dev -- --webpack`.
+
+Environment variables (both are public client-side values, by design — data access
+is protected by owner-scoped Row Level Security, not key secrecy):
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+
+## Deployment
+
+Deploys as a standard Next.js app on Vercel — set the two environment variables
+above in the Vercel project (Production), and configure the deployed URL as the
+**Site URL** under Supabase → Authentication → URL Configuration.
 
 ## What's inside
 
