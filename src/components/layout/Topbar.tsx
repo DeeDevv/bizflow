@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, LogOut, Menu, PackageSearch, ReceiptText, Search, Settings as SettingsIcon, X } from "lucide-react";
+import { Bell, LogOut, Menu, PackageSearch, ReceiptText, Search, Settings as SettingsIcon, Trash2, X } from "lucide-react";
 import { MobileNav } from "./MobileNav";
+import { DeleteAccountDialog } from "@/components/auth/DeleteAccountDialog";
 import { useAuth } from "@/lib/auth-store";
 import { useBusiness } from "@/lib/business-store";
 import { useProducts } from "@/lib/products-store";
@@ -158,6 +159,7 @@ function NotificationsBell() {
 
 export function Topbar({ title }: { title: string }) {
   const [navOpen, setNavOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const { user, signOut } = useAuth();
   const { business } = useBusiness();
 
@@ -223,10 +225,21 @@ export function Topbar({ title }: { title: string }) {
               email={user?.email ?? ""}
               businessName={business.name}
               onLogout={() => void signOut()}
+              onDelete={() => setDeleteOpen(true)}
             />
           </div>
         </div>
       </header>
+
+      {/* Rendered outside the (backdrop-blurred) header so the fixed overlay
+          isn't confined to the header box. */}
+      {deleteOpen ? (
+        <DeleteAccountDialog
+          email={user?.email ?? ""}
+          businessName={business.name}
+          onClose={() => setDeleteOpen(false)}
+        />
+      ) : null}
 
       <MobileNav open={navOpen} onClose={() => setNavOpen(false)} />
     </>
@@ -238,11 +251,13 @@ function UserMenu({
   email,
   businessName,
   onLogout,
+  onDelete,
 }: {
   initials: string;
   email: string;
   businessName: string;
   onLogout: () => void;
+  onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -289,6 +304,18 @@ function UserMenu({
             >
               <LogOut aria-hidden className="h-4 w-4 text-zinc-400" />
               Log out
+            </button>
+            <div aria-hidden className="border-t border-zinc-100" />
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onDelete();
+              }}
+              className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
+            >
+              <Trash2 aria-hidden className="h-4 w-4" />
+              Delete account
             </button>
           </div>
         </>

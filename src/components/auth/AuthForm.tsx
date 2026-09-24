@@ -50,7 +50,12 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(
+    // A user who just deleted their account lands here with ?deleted=1.
+    params.get("deleted") === "1"
+      ? "Your account has been deleted. You can create a new account anytime."
+      : null,
+  );
   const [busy, setBusy] = useState(false);
 
   const isSignup = mode === "signup";
