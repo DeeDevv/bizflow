@@ -62,6 +62,12 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
         // Demo mode without credentials: keep the mock catalog working.
         setProducts(seedProducts);
         setStatus("ready");
+      } else if (result.kind === "no-business") {
+        // Brand-new signup: nothing registered yet — an empty catalog is
+        // the truth (the SetupGate collects the business first anyway).
+        setProducts([]);
+        setStatus("ready");
+        setError(null);
       } else {
         setStatus("error");
         setError(result.message);

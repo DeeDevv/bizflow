@@ -97,6 +97,12 @@ export function InvoicesProvider({ children }: { children: React.ReactNode }) {
         // Demo mode without credentials: keep the mock data working.
         setInvoices(seedInvoices);
         setStatus("ready");
+      } else if (invResult.kind === "no-business") {
+        // Brand-new signup: no business registered yet — empty state.
+        setInvoices([]);
+        setPayments([]);
+        setStatus("ready");
+        setError(null);
       } else {
         setStatus("error");
         setError(invResult.message);

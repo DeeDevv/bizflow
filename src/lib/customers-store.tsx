@@ -56,6 +56,11 @@ export function CustomersProvider({ children }: { children: React.ReactNode }) {
         // Demo mode without credentials: keep the mock data working.
         setCustomers(seedCustomers);
         setStatus("ready");
+      } else if (result.kind === "no-business") {
+        // Brand-new signup: no business registered yet — empty list.
+        setCustomers([]);
+        setStatus("ready");
+        setError(null);
       } else {
         setStatus("error");
         setError(result.message);

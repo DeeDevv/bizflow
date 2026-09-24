@@ -31,6 +31,7 @@ export type GetOrCreateResult =
 export type LoadReceiptsResult =
   | { kind: "ok"; receipts: { id: string; receiptNumber: string; paymentId: string; issuedAt: string; snapshot: ReceiptSnapshot }[] }
   | { kind: "no-config" }
+  | { kind: "no-business" }
   | { kind: "error"; message: string };
 
 /** Create the receipt for a payment (or return the existing one's id). */

@@ -74,6 +74,15 @@ export function cn(...classes: Array<string | false | null | undefined>): string
   return classes.filter(Boolean).join(" ");
 }
 
+/** "adeagadavid.o" → "AO" — avatar initials from the login email. */
+export function initialsFromEmail(email: string): string {
+  const name = email.split("@")[0] || "?";
+  const parts = name.split(/[._\-\s]+/).filter(Boolean);
+  const letters =
+    parts.length >= 2 ? parts[0][0] + parts[1][0] : name.slice(0, 2);
+  return letters.toUpperCase();
+}
+
 /** Store full http(s) URLs: bare domains get https:// added for the owner. */
 export function normalizeWebsiteUrl(raw: string): string {
   const trimmed = raw.trim();

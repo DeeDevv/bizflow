@@ -6,6 +6,7 @@ import { Brand } from "./Brand";
 import { NavLinks } from "./NavLinks";
 import { navItems } from "@/lib/nav";
 import { useAuth } from "@/lib/auth-store";
+import { initialsFromEmail } from "@/lib/utils";
 
 interface MobileNavProps {
   open: boolean;
@@ -17,10 +18,7 @@ function MobileUserFooter() {
   const { user, signOut } = useAuth();
   const email = user?.email ?? "";
   const name = email ? email.split("@")[0] : "Signed in";
-  const nameParts = (email.split("@")[0] || "?").split(/[._\-\s]+/).filter(Boolean);
-  const initials = (
-    nameParts.length >= 2 ? nameParts[0][0] + nameParts[1][0] : (email.split("@")[0] || "··").slice(0, 2)
-  ).toUpperCase();
+  const initials = email ? initialsFromEmail(email) : "··";
 
   return (
     <div className="border-t border-zinc-100 p-4">

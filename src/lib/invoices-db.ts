@@ -45,16 +45,19 @@ interface InvoiceItemRow {
 export type LoadInvoicesResult =
   | { kind: "ok"; invoices: Invoice[] }
   | { kind: "no-config" }
+  | { kind: "no-business" }
   | { kind: "error"; message: string };
 
 export type MutationResult =
   | { kind: "ok"; invoice?: Invoice }
   | { kind: "no-config" }
+  | { kind: "no-business" }
   | { kind: "error"; message: string };
 
 export type FinalizeResult =
   | { kind: "ok" }
   | { kind: "no-config" }
+  | { kind: "no-business" }
   | { kind: "error"; message: string };
 
 function num(value: string | number | null | undefined): number {

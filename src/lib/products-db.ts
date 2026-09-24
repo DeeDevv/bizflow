@@ -12,7 +12,7 @@
 import { getSupabaseClient, isSupabaseConfigured } from "./supabase";
 import type { Product } from "./types";
 import { getBusinessInfo, updateBusinessInfo } from "./business-store";
-import { loadBusiness, saveBusiness } from "./business-db";
+import { loadBusiness } from "./business-db";
 
 /** A row from the `products` table, as Supabase returns it. */
 interface ProductRow {
@@ -27,11 +27,13 @@ interface ProductRow {
 export type LoadProductsResult =
   | { kind: "ok"; products: Product[] }
   | { kind: "no-config" }
+  | { kind: "no-business" }
   | { kind: "error"; message: string };
 
 export type MutationResult =
   | { kind: "ok"; product?: Product }
   | { kind: "no-config" }
+  | { kind: "no-business" }
   | { kind: "error"; message: string };
 
 /** numeric columns arrive as strings from PostgREST — normalize. */
@@ -56,12 +58,17 @@ function toPayload(input: Omit<Product, "id">, businessId: string) {
 }
 
 /**
- * The database id of the owner business. Ensures a business row exists
- * before products can reference it (creates the profile lazily on first
- * catalog write, so products always attach to the correct business).
+ * The database id of the owner business. NEVER creates a business: a
+ * brand-new signup must register first (name, currency) — the setup screen
+ * owns creation. Loaders surface "no-business" so pages show their empty
+ * states (and the SetupGate routes to setup) instead of a phantom seed
+ * business with USD being created silently on first visit.
  */
 export async function ensureBusinessId(): Promise<
-  { kind: "ok"; id: string } | { kind: "no-config" } | { kind: "error"; message: string }
+  | { kind: "ok"; id: string }
+  | { kind: "no-config" }
+  | { kind: "no-business" }
+  | { kind: "error"; message: string }
 > {
   if (!isSupabaseConfigured) return { kind: "no-config" };
 
@@ -69,22 +76,13 @@ export async function ensureBusinessId(): Promise<
   if (cached) return { kind: "ok", id: cached };
 
   try {
-    // The database record is the source of truth: load the existing
-    // business instead of writing local (possibly seed/mock) values over
-    // it. Only create a row when none exists yet (first run).
     const result = await loadBusiness();
     if (result.kind === "ok" && result.business.id) {
       updateBusinessInfo({ ...result.business });
       return { kind: "ok", id: result.business.id };
     }
-    if (result.kind === "empty") {
-      // Phase 6: saveBusiness stamps owner_user_id from the authenticated
-      // session, so a first-run catalog write creates an owned business
-      // instead of an orphan row.
-      const created = await saveBusiness(getBusinessInfo());
-      if (created.kind !== "ok") return created;
-      updateBusinessInfo({ id: created.id });
-      return { kind: "ok", id: created.id };
+    if (result.kind === "empty" || result.kind === "no-config") {
+      return { kind: "no-business" };
     }
     return result.kind === "error"
       ? result

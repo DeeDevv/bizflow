@@ -31,6 +31,7 @@ export type RecordPaymentResult =
 export type LoadPaymentsResult =
   | { kind: "ok"; payments: InvoicePayment[] }
   | { kind: "no-config" }
+  | { kind: "no-business" }
   | { kind: "error"; message: string };
 
 function rowToPayment(row: PaymentRow): InvoicePayment {

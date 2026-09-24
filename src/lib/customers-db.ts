@@ -25,11 +25,13 @@ interface CustomerRow {
 export type LoadCustomersResult =
   | { kind: "ok"; customers: Customer[] }
   | { kind: "no-config" }
+  | { kind: "no-business" }
   | { kind: "error"; message: string };
 
 export type MutationResult =
   | { kind: "ok"; customer?: Customer }
   | { kind: "no-config" }
+  | { kind: "no-business" }
   | { kind: "error"; message: string };
 
 function rowToCustomer(row: CustomerRow): Customer {

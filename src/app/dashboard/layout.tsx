@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
+import { SetupGate } from "@/components/dashboard/SetupGate";
 import { CustomersProvider } from "@/lib/customers-store";
 import { InvoicesProvider } from "@/lib/invoices-store";
 import { ProductsProvider } from "@/lib/products-store";
@@ -20,7 +21,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Sidebar />
               <div className="flex min-h-dvh flex-col lg:pl-64">
                 <Topbar title="Business" />
-                <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+                <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+                  {/* First-time owners register their business before the app shows. */}
+                  <SetupGate>{children}</SetupGate>
+                </main>
               </div>
             </div>
           </ProductsProvider>

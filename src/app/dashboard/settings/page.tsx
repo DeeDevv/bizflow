@@ -7,24 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { useBusiness } from "@/lib/business-store";
 import { loadBusiness, saveBusiness } from "@/lib/business-db";
 import { cn, isValidWebsiteUrl, normalizeWebsiteUrl } from "@/lib/utils";
-
-// The database stores the ISO code; the symbol is display-only.
-const CURRENCIES = [
-  { code: "USD", label: "USD — US Dollar ($)" },
-  { code: "EUR", label: "EUR — Euro (€)" },
-  { code: "GBP", label: "GBP — British Pound (£)" },
-  { code: "NGN", label: "NGN — Nigerian Naira (₦)" },
-  { code: "KES", label: "KES — Kenyan Shilling (KSh)" },
-  { code: "ZAR", label: "ZAR — South African Rand (R)" },
-  { code: "GHS", label: "GHS — Ghanaian Cedi (₵)" },
-  { code: "INR", label: "INR — Indian Rupee (₹)" },
-  { code: "AED", label: "AED — UAE Dirham (د.إ)" },
-  { code: "CAD", label: "CAD — Canadian Dollar (C$)" },
-  { code: "AUD", label: "AUD — Australian Dollar (A$)" },
-  { code: "JPY", label: "JPY — Japanese Yen (¥)" },
-  { code: "SGD", label: "SGD — Singapore Dollar (S$)" },
-  { code: "BRL", label: "BRL — Brazilian Real (R$)" },
-];
+import { CURRENCIES } from "@/lib/currencies";
 
 const field =
   "mt-1.5 w-full rounded-lg border border-zinc-300 bg-surface px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20";
