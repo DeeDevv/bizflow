@@ -27,6 +27,7 @@ interface BusinessRow {
   currency: string;
   logo_url: string | null;
   discounts_enabled: boolean;
+  website_url: string | null;
   owner_user_id: string | null;
 }
 
@@ -53,6 +54,7 @@ function rowToBusiness(row: BusinessRow): BusinessInfo {
     currency: row.currency ?? "USD",
     logoUrl: row.logo_url ?? "",
     discountsEnabled: row.discounts_enabled ?? true,
+    websiteUrl: row.website_url ?? "",
   };
 }
 
@@ -138,6 +140,7 @@ export async function saveBusiness(
       currency: business.currency,
       logo_url: business.logoUrl || null,
       discounts_enabled: business.discountsEnabled,
+      website_url: business.websiteUrl || null,
     };
 
     if (existingId) {

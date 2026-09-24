@@ -1,7 +1,9 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-jakarta), var(--font-inter), ui-sans-serif,
+    system-ui, sans-serif;
 
   /* Brand — indigo */
   --color-brand-50: oklch(0.962 0.018 272.314);
@@ -36,6 +38,16 @@ body {
 body {
   @apply bg-canvas font-sans text-ink antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Headings carry the display face for a sharper hierarchy. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
 }
 
 /* Thin, unobtrusive scrollbars for the dashboard shell */
@@ -77,10 +89,28 @@ body {
   animation: splash-pulse 2s ease-in-out infinite;
 }
 
+/* Auth screens: a gentle, continuous pulse on the BizFlow logo. */
+@keyframes logo-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.035);
+  }
+}
+
+.animate-logo-pulse {
+  animation: logo-pulse 2.8s ease-in-out infinite;
+}
+
 /* Respect users who prefer reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .animate-rise-in,
-  .animate-splash-pulse {
+  .animate-splash-pulse,
+  .animate-logo-pulse {
     animation: none;
   }
 }

@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 /**
  * First-visit splash screen. Server-rendered so the logo is on screen from
  * the very first paint (the page can never flash through it), then fades
- * out after a short hold. Shown once per browser session; every later
+ * out after a ~2.6s hold — long enough to register the brand without
+ * getting in the way. Shown once per browser session; every later
  * navigation in the same tab skips it entirely.
  *
  * Pure overlay — it renders above the app and unmounts completely, so no
@@ -43,8 +44,8 @@ export function SplashScreen() {
       } catch {
         // Private mode without storage: splash simply shows every visit.
       }
-    }, 1500);
-    const doneTimer = setTimeout(() => setPhase("done"), 2200);
+    }, 2600);
+    const doneTimer = setTimeout(() => setPhase("done"), 3300);
     return () => {
       clearTimeout(fadeTimer);
       clearTimeout(doneTimer);

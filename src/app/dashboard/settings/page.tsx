@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ImagePlus, Trash2 } from "lucide-react";
+import { Check, Globe, ImagePlus, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useBusiness } from "@/lib/business-store";
 import { loadBusiness, saveBusiness } from "@/lib/business-db";
-import { cn } from "@/lib/utils";
+import { cn, isValidWebsiteUrl, normalizeWebsiteUrl } from "@/lib/utils";
 
 // The database stores the ISO code; the symbol is display-only.
 const CURRENCIES = [
@@ -36,6 +36,11 @@ function initials(name: string): string {
     .slice(0, 2)
     .join("")
     .toUpperCase();
+}
+
+/** www.daoelectronics.com — for display only; links keep the full URL. */
+function prettyUrl(url: string): string {
+  return url.replace(/^https?:\/\//i, "").replace(/\/$/, "");
 }
 
 /** Small accessible switch used for the discount setting. */
@@ -83,6 +88,13 @@ export default function BusinessSettingsPage() {
   const [logoUrl, setLogoUrl] = useState(business.logoUrl);
   const [discountsEnabled, setDiscountsEnabled] = useState(business.discountsEnabled);
 
+  // Business Website: the Yes/No answer, the editable URL field, and the URL
+  // currently connected (shown as the read-only link until edited/removed).
+  const [hasWebsite, setHasWebsite] = useState(Boolean(business.websiteUrl));
+  const [websiteInput, setWebsiteInput] = useState(business.websiteUrl);
+  const [connectedUrl, setConnectedUrl] = useState(business.websiteUrl);
+  const [editingWebsite, setEditingWebsite] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -107,6 +119,9 @@ export default function BusinessSettingsPage() {
         setCurrency(result.business.currency);
         setLogoUrl(result.business.logoUrl);
         setDiscountsEnabled(result.business.discountsEnabled);
+        setWebsiteInput(result.business.websiteUrl);
+        setHasWebsite(Boolean(result.business.websiteUrl));
+        setConnectedUrl(result.business.websiteUrl);
       } else if (result.kind === "error") {
         setDbError(result.message);
       }
@@ -150,6 +165,18 @@ export default function BusinessSettingsPage() {
       return;
     }
 
+    // Business Website: "No" saves without a URL; "Yes" requires a valid one.
+    const normalizedUrl = normalizeWebsiteUrl(websiteInput);
+    if (hasWebsite && !normalizedUrl) {
+      setError("Please enter your website URL, or choose \u201cNo\u201d if you don\u2019t have one yet.");
+      return;
+    }
+    if (hasWebsite && !isValidWebsiteUrl(normalizedUrl)) {
+      setError("Please enter a valid website URL, e.g. https://example.com");
+      return;
+    }
+    const finalWebsiteUrl = hasWebsite ? normalizedUrl : "";
+
     const input = {
       name: trimmedName,
       email: email.trim(),
@@ -159,6 +186,7 @@ export default function BusinessSettingsPage() {
       currency,
       logoUrl,
       discountsEnabled,
+      websiteUrl: finalWebsiteUrl,
     };
 
     dirtyRef.current = true;
@@ -176,6 +204,37 @@ export default function BusinessSettingsPage() {
       return;
     }
 
+    setError(null);
+    setSaved(true);
+    setConnectedUrl(finalWebsiteUrl); // the saved URL is now the connected one
+    setEditingWebsite(false);
+    if (savedTimer.current) clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => setSaved(false), 2500);
+  }
+
+  /** Remove the connected website right away (clears it in the database). */
+  async function handleRemoveWebsite() {
+    const input = {
+      name: name.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      whatsapp: whatsapp.trim(),
+      address: address.trim(),
+      currency,
+      logoUrl,
+      discountsEnabled,
+      websiteUrl: "",
+    };
+    const result = await saveBusiness(input);
+    updateBusiness(input);
+    setHasWebsite(false);
+    setWebsiteInput("");
+    setConnectedUrl("");
+    setEditingWebsite(false);
+    if (result.kind === "error") {
+      setError("Removed on this device, but the database said: " + result.message);
+      return;
+    }
     setError(null);
     setSaved(true);
     if (savedTimer.current) clearTimeout(savedTimer.current);
@@ -349,6 +408,115 @@ export default function BusinessSettingsPage() {
               </p>
             </div>
           </div>
+        </Card>
+
+        {/* Business Website (Phase 8 — account → saved external URL only) */}
+        <Card className="p-5 sm:p-6">
+          <h2 className="text-sm font-semibold text-zinc-900">Business Website</h2>
+
+          {connectedUrl && !editingWebsite ? (
+            /* Connected: show the clickable site with Visit / Edit / Remove */
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+                  Connected website
+                </p>
+                <a
+                  href={connectedUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-0.5 block truncate text-sm font-medium text-brand-600 hover:text-brand-700 hover:underline"
+                >
+                  {prettyUrl(connectedUrl)}
+                </a>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <a
+                  href={connectedUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 bg-surface px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                >
+                  <Globe aria-hidden className="h-3.5 w-3.5" />
+                  Visit Website
+                </a>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setWebsiteInput(connectedUrl);
+                    setEditingWebsite(true);
+                  }}
+                >
+                  Edit
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleRemoveWebsite}>
+                  Remove
+                </Button>
+              </div>
+            </div>
+          ) : (
+            /* Not connected (or editing): the Yes/No question */
+            <div className="mt-3">
+              <p className="text-sm font-medium text-zinc-900">
+                Do you already have a business website?
+              </p>
+              <div className="mt-2.5 flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  aria-pressed={hasWebsite}
+                  onClick={() => setHasWebsite(true)}
+                  className={cn(
+                    "flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
+                    hasWebsite
+                      ? "border-brand-500 bg-brand-50 text-brand-700"
+                      : "border-zinc-200 bg-surface text-zinc-700 hover:bg-zinc-50",
+                  )}
+                >
+                  Yes, I have a website
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={!hasWebsite}
+                  onClick={() => setHasWebsite(false)}
+                  className={cn(
+                    "flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
+                    !hasWebsite
+                      ? "border-brand-500 bg-brand-50 text-brand-700"
+                      : "border-zinc-200 bg-surface text-zinc-700 hover:bg-zinc-50",
+                  )}
+                >
+                  No, I don’t have a website
+                </button>
+              </div>
+
+              {hasWebsite ? (
+                <div className="mt-4">
+                  <label htmlFor="biz-website" className="text-sm font-medium text-zinc-700">
+                    Website URL
+                  </label>
+                  <input
+                    id="biz-website"
+                    type="url"
+                    inputMode="url"
+                    value={websiteInput}
+                    onChange={(e) => setWebsiteInput(e.target.value)}
+                    placeholder="https://example.com"
+                    className={field}
+                  />
+                  <p className="mt-1.5 text-xs text-zinc-400">
+                    We’ll save this to your BizFlow profile. Future updates can
+                    connect it to your stock and orders.
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-zinc-500">
+                  No problem — BizFlow works fine without one. You can add a
+                  website anytime from this page.
+                </p>
+              )}
+            </div>
+          )}
         </Card>
 
         {/* Discounts */}

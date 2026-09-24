@@ -20,6 +20,7 @@ export const businessInfo: BusinessInfo = {
   currency: "USD",
   logoUrl: "",
   discountsEnabled: true,
+  websiteUrl: "",
 };
 
 /* ------------------------------------------------------------------ */

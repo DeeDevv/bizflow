@@ -139,6 +139,8 @@ export interface BusinessInfo {
   logoUrl: string;
   /** Whether this business offers discounts (Phase 3 invoice workflow reads this). */
   discountsEnabled: boolean;
+  /** Optional external website (https) linked to this profile. Empty = none. */
+  websiteUrl: string;
 }
 
 /** One sellable product or service in the catalog. */

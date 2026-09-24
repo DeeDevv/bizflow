@@ -74,6 +74,27 @@ export function cn(...classes: Array<string | false | null | undefined>): string
   return classes.filter(Boolean).join(" ");
 }
 
+/** Store full http(s) URLs: bare domains get https:// added for the owner. */
+export function normalizeWebsiteUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : "https://" + trimmed;
+}
+
+/** Valid http(s) URL with a real host, e.g. https://example.com. */
+export function isValidWebsiteUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return (
+      (u.protocol === "http:" || u.protocol === "https:") &&
+      u.hostname.includes(".") &&
+      !u.hostname.includes(" ")
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Look up a customer's display name; falls back gracefully if removed. */
 export function getCustomerName(
   customerMap: Map<string, string>,

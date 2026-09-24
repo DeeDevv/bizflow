@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Brand } from "@/components/layout/Brand";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase";
@@ -116,7 +116,15 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     <div className="flex min-h-dvh items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex justify-center">
-          <Brand />
+          {/* The BizFlow logo with a soft, continuous pulse. */}
+          <Image
+            src="/bizflow-logo.png"
+            alt="BizFlow"
+            width={320}
+            height={72}
+            priority
+            className="h-auto w-44 animate-logo-pulse sm:w-52"
+          />
         </div>
 
         <Card className="p-6 sm:p-8">
