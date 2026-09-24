@@ -49,7 +49,7 @@ export function DeleteAccountDialog({
         "@/lib/supabase"
       );
       if (!isSupabaseConfigured) {
-        setError("BizFlow is not connected to the database.");
+        setError("BizMate is not connected to the database.");
         setBusy(false);
         return;
       }

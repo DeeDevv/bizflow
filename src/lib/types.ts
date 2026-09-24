@@ -1,5 +1,5 @@
 /**
- * Core domain types for BizFlow.
+ * Core domain types for BizMate.
  * API-shaped so a future backend can slot in without UI redesign.
  */
 

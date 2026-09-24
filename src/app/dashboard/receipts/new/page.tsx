@@ -51,7 +51,7 @@ function NewReceiptContent() {
       } else if (result.kind === "error") {
         setError(result.message);
       } else {
-        setError("BizFlow is not connected to the database.");
+        setError("BizMate is not connected to the database.");
       }
     });
   }, [paymentId, missingPayment, router]);

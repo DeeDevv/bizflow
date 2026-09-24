@@ -232,7 +232,7 @@ export default function BusinessSettingsPage() {
           Business Settings
         </h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Enter your details once — BizFlow reuses them on your invoices and receipts.
+          Enter your details once — BizMate reuses them on your invoices and receipts.
         </p>
       </div>
 
@@ -274,7 +274,7 @@ export default function BusinessSettingsPage() {
                 aria-hidden
                 className="flex h-16 w-16 items-center justify-center rounded-xl bg-brand-100 text-lg font-semibold text-brand-700"
               >
-                {initials(name || "BizFlow")}
+                {initials(name || "BizMate")}
               </span>
             )}
             <div>
@@ -306,7 +306,7 @@ export default function BusinessSettingsPage() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. BizFlow Studio LLC"
+                placeholder="e.g. Dao Electronics Ltd"
                 className={field}
               />
             </div>
@@ -488,13 +488,13 @@ export default function BusinessSettingsPage() {
                     className={field}
                   />
                   <p className="mt-1.5 text-xs text-zinc-400">
-                    We’ll save this to your BizFlow profile. Future updates can
+                    We’ll save this to your BizMate profile. Future updates can
                     connect it to your stock and orders.
                   </p>
                 </div>
               ) : (
                 <p className="mt-3 text-sm text-zinc-500">
-                  No problem — BizFlow works fine without one. You can add a
+                  No problem — BizMate works fine without one. You can add a
                   website anytime from this page.
                 </p>
               )}
@@ -533,7 +533,7 @@ export default function BusinessSettingsPage() {
             {saved ? (
               <span className="mr-auto inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700">
                 <Check aria-hidden className="h-4 w-4" />
-                Saved — reused across BizFlow
+                Saved — reused across BizMate
               </span>
             ) : (
               <span className="mr-auto text-sm text-zinc-400">Changes apply right away.</span>

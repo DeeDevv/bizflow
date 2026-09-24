@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
  * existing page, layout, or workflow is touched.
  */
 
-const SESSION_KEY = "bizflow.splash.seen";
+const SESSION_KEY = "bizmate.splash.seen";
 
 /** True when this browser session has already seen the splash. */
 export function splashAlreadySeen(): boolean {
@@ -65,8 +65,8 @@ export function SplashScreen() {
         {/* Subtle breathing ring behind the logo */}
         <span className="absolute h-40 w-40 animate-splash-pulse rounded-full bg-brand-500/10 sm:h-52 sm:w-52" />
         <Image
-          src="/bizflow-logo.png"
-          alt="BizFlow"
+          src="/bizmate-logo.png"
+          alt="BizMate"
           width={320}
           height={72}
           priority

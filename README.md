@@ -1,4 +1,4 @@
-# BizFlow — Business Management SaaS Dashboard
+# BizMate — Business Management SaaS Dashboard
 
 A modern business management dashboard built with **Next.js (App Router)**,
 **TypeScript**, **Tailwind CSS v4**, and **Supabase** (Postgres + Auth + RLS).
@@ -74,7 +74,7 @@ sidebar stays clean and obvious.
   the nullable `businesses.website_url` column (migration `0010`) — foundation
   for future website integrations, no syncing yet.
 - **Typography & brand** — Inter (body) + Plus Jakarta Sans (headings) via
-  `next/font`; splash screen on first visit per session; the BizFlow logo with a
+  `next/font`; splash screen on first visit per session; the BizMate logo with a
   subtle pulse fronts the Login and Sign Up screens.
 
 ## Project structure

@@ -1,7 +1,7 @@
 import type { BusinessInfo, Customer, Invoice, Product } from "./types";
 
 /**
- * Realistic mock data for BizFlow (frontend-only).
+ * Realistic mock data for BizMate (frontend-only).
  * Customers ↔ invoices are linked; every total in the UI is derived from
  * these records, so numbers can never disagree between pages.
  * In a later phase this module is the only file to swap for real API calls.
@@ -12,8 +12,8 @@ import type { BusinessInfo, Customer, Invoice, Product } from "./types";
 /* ------------------------------------------------------------------ */
 
 export const businessInfo: BusinessInfo = {
-  name: "BizFlow Studio LLC",
-  email: "billing@bizflow.io",
+  name: "Sample Business LLC",
+  email: "hello@bizmate.example",
   phone: "+1 (555) 010-0100",
   address: "418 Harbor Ave, Suite 12, Austin, TX 78701, USA",
   whatsapp: "+1 (555) 010-0100",

@@ -1,4 +1,4 @@
-/** BizFlow logo lockup — gradient mark plus wordmark. */
+/** BizMate logo lockup — gradient mark plus wordmark. */
 export function Brand({ className }: { className?: string }) {
   return (
     <div className={`flex items-center gap-2.5 ${className ?? ""}`}>
@@ -20,7 +20,7 @@ export function Brand({ className }: { className?: string }) {
         </svg>
       </span>
       <span className="text-[17px] font-semibold tracking-tight text-zinc-900">
-        BizFlow
+        BizMate
       </span>
     </div>
   );

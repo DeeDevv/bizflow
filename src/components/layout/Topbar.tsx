@@ -182,7 +182,7 @@ export function Topbar({ title }: { title: string }) {
             href="/dashboard"
             className="text-sm font-semibold text-zinc-900 lg:hidden"
           >
-            BizFlow
+            BizMate
           </Link>
 
           {/* Desktop: breadcrumb (business name once registered) */}

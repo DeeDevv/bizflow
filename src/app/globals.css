@@ -89,7 +89,7 @@ h6 {
   animation: splash-pulse 2s ease-in-out infinite;
 }
 
-/* Auth screens: a gentle, continuous pulse on the BizFlow logo. */
+/* Auth screens: a gentle, continuous pulse on the BizMate logo. */
 @keyframes logo-pulse {
   0%,
   100% {

@@ -1,8 +1,8 @@
 /**
- * Supabase client for BizFlow.
+ * Supabase client for BizMate.
  *
  * ── WHERE DO MY CREDENTIALS GO? ──────────────────────────────────────────
- * They go in the `.env.local` file in the `bizflow-tmp/` folder, on these
+ * They go in the `.env.local` file at the project root, on these
  * two lines (the lines already exist there — just paste your values after
  * the "=" and save):
  *
@@ -54,8 +54,8 @@ let client: ReturnType<typeof createBrowserClient> | null = null;
 export function getSupabaseClient() {
   if (!supabaseUrl || !supabasePublishableKey) {
     throw new Error(
-      "[BizFlow] Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and " +
-        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY to bizflow-tmp/.env.local " +
+      "[BizMate] Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and " +
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY to .env.local " +
         "(see the top of src/lib/supabase.ts), then restart the dev server.",
     );
   }
@@ -67,8 +67,8 @@ export function getSupabaseClient() {
 
 if (process.env.NODE_ENV === "development" && !isSupabaseConfigured) {
   console.warn(
-    "[BizFlow] Supabase is not configured yet — the app keeps running on " +
-      "mock data. Add your credentials to bizflow-tmp/.env.local " +
+    "[BizMate] Supabase is not configured yet — the app keeps running on " +
+      "mock data. Add your credentials to .env.local " +
       "(instructions are at the top of src/lib/supabase.ts).",
   );
 }

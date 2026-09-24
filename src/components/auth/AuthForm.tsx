@@ -8,10 +8,9 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase";
 
-/**
- * The BizFlow entry form (Phase 6) — one component, two modes.
+/**  * The BizMate entry form (Phase 6) — one component, two modes.
  * Login and signup both go through Supabase Auth (email + password);
- * BizFlow never sees or stores the password.
+ * BizMate never sees or stores the password.
  */
 
 const inputClass =
@@ -75,7 +74,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     }
     if (!isSupabaseConfigured) {
       setError(
-        "BizFlow is not connected to the database yet. Add your Supabase credentials to .env.local and restart the server.",
+        "BizMate is not connected to the database yet. Add your Supabase credentials to .env.local and restart the server.",
       );
       return;
     }
@@ -121,10 +120,10 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     <div className="flex min-h-dvh items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex justify-center">
-          {/* The BizFlow logo with a soft, continuous pulse. */}
+          {/* The BizMate logo with a soft, continuous pulse. */}
           <Image
-            src="/bizflow-logo.png"
-            alt="BizFlow"
+            src="/bizmate-logo.png"
+            alt="BizMate"
             width={320}
             height={72}
             priority
@@ -139,7 +138,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           <p className="mt-1 text-sm text-zinc-500">
             {isSignup
               ? "Start managing your business in minutes."
-              : "Log in to your BizFlow workspace."}
+              : "Log in to your BizMate workspace."}
           </p>
 
           {error ? (
@@ -211,7 +210,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
               </>
             ) : (
               <>
-                New to BizFlow?{" "}
+                New to BizMate?{" "}
                 <Link href="/signup" className="font-medium text-brand-600 hover:text-brand-700">
                   Create an account
                 </Link>

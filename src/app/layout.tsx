@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { SplashScreen } from "@/components/SplashScreen";
@@ -21,11 +21,28 @@ const jakarta = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   title: {
-    default: "BizFlow — Business Management Dashboard",
-    template: "%s · BizFlow",
+    default: "BizMate — Simple business management",
+    template: "%s · BizMate",
   },
   description:
-    "BizFlow is a modern business management dashboard for revenue, sales, customers, and invoices — built for international businesses.",
+    "BizMate — Simple business management for growing businesses. Track sales, customers, invoices, payments, and receipts in one clean dashboard.",
+  openGraph: {
+    title: "BizMate — Simple business management",
+    description:
+      "BizMate — Simple business management for growing businesses. Track sales, customers, invoices, payments, and receipts in one clean dashboard.",
+    siteName: "BizMate",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "BizMate — Simple business management",
+    description:
+      "BizMate — Simple business management for growing businesses.",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#1e3a8a",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

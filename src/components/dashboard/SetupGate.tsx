@@ -84,8 +84,8 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
     <div className="mx-auto max-w-lg py-6">
       <div className="mb-6 flex justify-center">
         <Image
-          src="/bizflow-logo.png"
-          alt="BizFlow"
+          src="/bizmate-logo.png"
+          alt="BizMate"
           width={240}
           height={54}
           priority
@@ -98,7 +98,7 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
           Set up your business
         </h1>
         <p className="mt-1.5 text-sm text-zinc-500">
-          Welcome! Tell us about your business to finish setting up BizFlow.
+          Welcome! Tell us about your business to finish setting up BizMate.
           You can change these details anytime in Settings.
         </p>
 
