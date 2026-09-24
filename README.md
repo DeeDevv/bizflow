@@ -69,6 +69,13 @@ sidebar stays clean and obvious.
   persist to `localStorage` and sync across browser tabs; the demo survives
   reloads (clear site data to reset to seed numbers). "Overdue" is computed live
   from the due date, so it can never go stale.
+- **Business Website** — Settings asks "Do you already have a business website?";
+  a valid URL can be saved, edited, removed, and opened in a new tab. Stored in
+  the nullable `businesses.website_url` column (migration `0010`) — foundation
+  for future website integrations, no syncing yet.
+- **Typography & brand** — Inter (body) + Plus Jakarta Sans (headings) via
+  `next/font`; splash screen on first visit per session; the BizFlow logo with a
+  subtle pulse fronts the Login and Sign Up screens.
 
 ## Project structure
 
