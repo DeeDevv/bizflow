@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { ProductDemo, demoAlreadySeen } from "@/components/auth/ProductDemo";
+import { splashAlreadySeen } from "@/components/SplashScreen";
 import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase";
 
 /**  * The BizMate entry form (Phase 6) — one component, two modes.
@@ -56,6 +58,16 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       : null,
   );
   const [busy, setBusy] = useState(false);
+  const [demoOpen, setDemoOpen] = useState(false);
+
+  // Flow: Splash → Demo → this form. The demo opens once, after the splash
+  // finishes (2.6s hold + 0.7s fade), only for first-time visitors — never
+  // for a returning user who has seen it, skipped it, or completed it.
+  useEffect(() => {
+    if (demoAlreadySeen() || splashAlreadySeen()) return;
+    const timer = setTimeout(() => setDemoOpen(true), 3450);
+    return () => clearTimeout(timer);
+  }, []);
 
   const isSignup = mode === "signup";
 
@@ -118,6 +130,19 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
 
   return (
     <div className="flex min-h-dvh items-center justify-center px-4 py-10">
+      {demoOpen ? (
+        <ProductDemo
+          onClose={() => setDemoOpen(false)}
+          onStart={(dest) => {
+            const target = dest === "signup" ? "/signup" : "/login";
+            if (window.location.pathname !== target) {
+              window.location.assign(target);
+            } else {
+              setDemoOpen(false);
+            }
+          }}
+        />
+      ) : null}
       <div className="w-full max-w-sm">
         <div className="mb-8 flex justify-center">
           {/* The BizMate logo with a soft, continuous pulse. */}

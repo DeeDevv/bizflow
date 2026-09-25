@@ -106,11 +106,73 @@ h6 {
   animation: logo-pulse 2.8s ease-in-out infinite;
 }
 
-/* Respect users who prefer reduced motion */
+/* Product demo: staggered entrances, checkmark pops, drawing connectors.
+   Pure CSS so the demo stays lightweight — no extra dependencies. */
+@keyframes demo-item {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-demo-item {
+  animation: demo-item 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes demo-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-demo-pop {
+  animation: demo-pop 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes demo-line {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.animate-demo-line {
+  animation: demo-line 0.3s ease both;
+  transform-origin: top;
+}
+
+/* Fade an element out and keep it hidden (used to swap the demo's
+   "Complete Sale" button for its success state). An opacity-only fade,
+   so it stays enabled even under prefers-reduced-motion. */
+@keyframes demo-hide {
+  to {
+    opacity: 0;
+  }
+}
+
+.animate-demo-hide {
+  animation: demo-hide 0.3s ease both;
+}
+
+/* Respect users who prefer reduced motion (opacity fades may remain) */
 @media (prefers-reduced-motion: reduce) {
   .animate-rise-in,
   .animate-splash-pulse,
-  .animate-logo-pulse {
+  .animate-logo-pulse,
+  .animate-demo-item,
+  .animate-demo-pop,
+  .animate-demo-line {
     animation: none;
   }
 }
