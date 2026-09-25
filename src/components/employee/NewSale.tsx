@@ -17,11 +17,11 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { useProducts } from "@/lib/products-store";
-import { seedProductExtras } from "@/lib/mock-data";
+import { productCode, productCategory, productBrand } from "@/lib/product-meta";
 import { useCustomers } from "@/lib/customers-store";
 import { currentEmployeeName } from "@/lib/employee-session";
 import { recordActivity } from "@/lib/activity-store";
-import { stockStatus } from "@/lib/stock-level";
+import { stockStatus } from "@/lib/domain/stock-state";
 import { processSaleCompleted } from "@/lib/domain/automation";
 import { buildReceiptData } from "@/lib/domain/receipt";
 import {
@@ -269,44 +269,6 @@ function ProductPicker() {
       ) : null}
     </Card>
   );
-}
-
-/* ---------------- Catalog metadata helpers (setup extras by name) ---------------- */
-
-interface ProductMeta {
-  code?: string;
-  category?: string;
-  brand?: string;
-}
-
-function setupExtrasMap(): Record<string, ProductMeta> {
-  try {
-    const raw = localStorage.getItem("bizmate.setup.v1");
-    if (raw) {
-      const parsed = JSON.parse(raw) as {
-        state?: { productExtras?: Record<string, ProductMeta> };
-        productExtras?: Record<string, ProductMeta>;
-      };
-      const map = parsed?.state?.productExtras ?? parsed?.productExtras;
-      if (map && Object.keys(map).length > 0) return map;
-    }
-  } catch {
-    // fall through to seed data
-  }
-  // No setup extras (demo mode): fall back to the seed catalog metadata.
-  return seedProductExtras as Record<string, ProductMeta>;
-}
-
-export function productCode(name: string): string {
-  return setupExtrasMap()[name]?.code ?? "—";
-}
-
-export function productCategory(name: string): string {
-  return setupExtrasMap()[name]?.category ?? "";
-}
-
-export function productBrand(name: string): string {
-  return setupExtrasMap()[name]?.brand ?? "";
 }
 
 /* ---------------- Customer section ---------------- */

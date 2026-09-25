@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { ReceiveStock } from "@/components/employee/ReceiveStock";
 
@@ -6,5 +7,9 @@ export const metadata: Metadata = {
 };
 
 export default function ReceiveStockPage() {
-  return <ReceiveStock />;
+  return (
+    <Suspense>
+      <ReceiveStock />
+    </Suspense>
+  );
 }

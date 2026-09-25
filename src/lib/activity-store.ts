@@ -13,7 +13,11 @@ import { createPersistentStore } from "./persistent-store";
  * event structure (SALE_COMPLETED, CUSTOMER_ADDED, STOCK_RECEIVED).
  */
 
-export type ActivityKind = "sale_completed" | "customer_added" | "stock_received";
+export type ActivityKind =
+  | "sale_completed"
+  | "customer_added"
+  | "stock_received"
+  | "stock_adjusted";
 
 export interface ActivityEntry {
   id: string;

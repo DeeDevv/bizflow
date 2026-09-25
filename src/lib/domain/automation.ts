@@ -20,6 +20,7 @@ import { raiseNotification } from "./notifications";
 import { recordPurchase } from "./customer-history";
 import { applySaleToMetrics } from "./metrics";
 import { buildReceiptData, type ReceiptData } from "./receipt";
+import { recordStockMovement } from "./stock-movements";
 
 /**
  * The BizMate automation engine (Phase 4).
@@ -198,10 +199,21 @@ export async function processSaleCompleted(
   // 4) Inventory: deduct every item (multi-product safe, stock-checked).
   const stockUpdates = draft.items.map((item) => {
     const product = catalog.find((p) => p.id === item.productId)!;
-    return { product, newStock: product.stock - item.quantity };
+    return { product, quantity: item.quantity, newStock: product.stock - item.quantity };
   });
-  for (const { product, newStock } of stockUpdates) {
+  for (const { product, quantity, newStock } of stockUpdates) {
     await applyStockChange(product.id, newStock);
+    // Movement ledger: traceable stock trail (sale → reference).
+    recordStockMovement({
+      kind: "sale",
+      productId: product.id,
+      productName: product.name,
+      quantity: -quantity,
+      stockBefore: product.stock,
+      stockAfter: newStock,
+      actor: sale.employeeName,
+      reference: sale.reference,
+    });
   }
 
   // 5) Transaction record (employee Transactions view / future reports).
@@ -300,6 +312,15 @@ export async function processStockReceived(
   await applyStockChange(product.id, newStock);
 
   const actor = input.actor || currentEmployeeName();
+  recordStockMovement({
+    kind: "receive",
+    productId: product.id,
+    productName: product.name,
+    quantity,
+    stockBefore: product.stock,
+    stockAfter: newStock,
+    actor,
+  });
   recordActivity({
     kind: "stock_received",
     actor,
@@ -308,6 +329,90 @@ export async function processStockReceived(
   });
 
   // Re-evaluate: low/out conditions resolve when stock returns to normal.
+  evaluateStockCondition({ ...product, stock: newStock });
+
+  return { kind: "ok", newStock };
+}
+
+/* ---------------- STOCK_ADJUSTED ---------------- */
+
+export const ADJUSTMENT_REASONS = [
+  "Damaged",
+  "Missing",
+  "Correction",
+  "Return",
+  "Counting error",
+  "Other",
+] as const;
+
+export type AdjustmentReason = (typeof ADJUSTMENT_REASONS)[number];
+
+export interface StockAdjustedInput {
+  product: Product;
+  /** Signed delta: negative = shrinkage (damaged/missing), positive = found stock. */
+  delta: number;
+  reason: AdjustmentReason;
+  note?: string;
+  actor?: string;
+  applyStockChange: (productId: string, newStock: number) => Promise<void> | void;
+}
+
+export type StockAdjustedResult =
+  | { kind: "ok"; newStock: number }
+  | { kind: "error"; message: string };
+
+/**
+ * Process an authorized stock adjustment (spec §15/§16): reason is REQUIRED,
+ * stock can never go below zero, everything is validated before mutation,
+ * and the movement lands in the ledger with full attribution.
+ */
+export async function processStockAdjusted(
+  input: StockAdjustedInput,
+): Promise<StockAdjustedResult> {
+  const { product, delta, reason, note, applyStockChange } = input;
+
+  if (!product) {
+    return { kind: "error", message: "Choose a product to adjust." };
+  }
+  if (!Number.isInteger(delta) || delta === 0) {
+    return { kind: "error", message: "Enter the adjustment quantity (not zero)." };
+  }
+  if (!reason) {
+    return { kind: "error", message: "Choose a reason for this adjustment." };
+  }
+
+  const newStock = product.stock + delta;
+  if (newStock < 0) {
+    return {
+      kind: "error",
+      message: `Adjustment rejected — stock cannot go below zero. Only ${product.stock} in stock.`,
+    };
+  }
+
+  await applyStockChange(product.id, newStock);
+
+  const actor = input.actor || currentEmployeeName();
+  const reference = `ADJ-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+  recordStockMovement({
+    kind: "adjust",
+    productId: product.id,
+    productName: product.name,
+    quantity: delta,
+    stockBefore: product.stock,
+    stockAfter: newStock,
+    actor,
+    reason,
+    note: note || undefined,
+    reference,
+  });
+  recordActivity({
+    kind: "stock_adjusted",
+    actor,
+    label: `adjusted ${product.name} by ${delta > 0 ? "+" : ""}${delta} (${reason.toLowerCase()})`,
+    productId: product.id,
+  });
+
+  // Adjustment may push a product into/out of a low or out condition.
   evaluateStockCondition({ ...product, stock: newStock });
 
   return { kind: "ok", newStock };
