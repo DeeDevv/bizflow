@@ -5,6 +5,7 @@ import { CustomersProvider } from "@/lib/customers-store";
 import { InvoicesProvider } from "@/lib/invoices-store";
 import { ProductsProvider } from "@/lib/products-store";
 import { BusinessProvider } from "@/lib/business-store";
+import { SetupProvider } from "@/lib/setup-store";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -17,7 +18,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <CustomersProvider>
         <InvoicesProvider>
           <ProductsProvider>
-            <div className="min-h-dvh">
+            <SetupProvider>
+              <div className="min-h-dvh">
               <Sidebar />
               <div className="flex min-h-dvh flex-col lg:pl-64">
                 <Topbar title="Business" />
@@ -27,6 +29,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </main>
               </div>
             </div>
+            </SetupProvider>
           </ProductsProvider>
         </InvoicesProvider>
       </CustomersProvider>

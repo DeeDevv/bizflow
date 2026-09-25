@@ -1,15 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Bell, LogOut, Menu, PackageSearch, ReceiptText, Search, Settings as SettingsIcon, Trash2, X } from "lucide-react";
 import { MobileNav } from "./MobileNav";
 import { DeleteAccountDialog } from "@/components/auth/DeleteAccountDialog";
 import { useAuth } from "@/lib/auth-store";
 import { useBusiness } from "@/lib/business-store";
-import { useProducts } from "@/lib/products-store";
-import { useInvoices } from "@/lib/invoices-store";
-import { effectiveStatus } from "@/lib/invoice-utils";
+import { useAttentionItems } from "@/lib/attention";
 import { initialsFromEmail } from "@/lib/utils";
 
 /**
@@ -30,46 +28,8 @@ type Notification = {
 };
 
 function useNotifications(): Notification[] {
-  const { products } = useProducts();
-  const { invoices } = useInvoices();
-
-  return useMemo(() => {
-    const notes: Notification[] = [];
-
-    for (const inv of invoices) {
-      if (effectiveStatus(inv) === "overdue") {
-        notes.push({
-          id: "inv-" + inv.id,
-          kind: "invoice",
-          title: `${inv.number} is overdue`,
-          detail: "This invoice is past its due date and still unpaid.",
-          href: "/dashboard/invoices/" + inv.id,
-        });
-      }
-    }
-
-    for (const p of products) {
-      if (p.stock <= 0) {
-        notes.push({
-          id: "stock-" + p.id,
-          kind: "stock",
-          title: `${p.name} is out of stock`,
-          detail: "Restock before selling more of this product.",
-          href: "/dashboard/products",
-        });
-      } else if (p.stock <= 5) {
-        notes.push({
-          id: "stock-" + p.id,
-          kind: "stock",
-          title: `${p.name} is running low`,
-          detail: `Only ${p.stock} left in stock.`,
-          href: "/dashboard/products",
-        });
-      }
-    }
-
-    return notes.slice(0, 8);
-  }, [products, invoices]);
+  // Same data as the Overview attention card — one source, two views.
+  return useAttentionItems();
 }
 
 function NotificationsBell() {

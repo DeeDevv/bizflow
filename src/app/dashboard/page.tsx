@@ -1,11 +1,20 @@
 import type { Metadata } from "next";
 import { KpiCards } from "@/components/dashboard/KpiCards";
 import { RecentSales } from "@/components/dashboard/RecentSales";
+import { AttentionCard } from "@/components/dashboard/AttentionCard";
+import { InventoryValueCard } from "@/components/dashboard/InventoryValueCard";
 
 export const metadata: Metadata = {
   title: "Overview",
 };
 
+/**
+ * Owner Command Center (Phase 2): the three owner questions —
+ * How is my business doing? (KPIs) · What needs my attention? (attention
+ * card) · What is BizMate noticing? (stock + overdue views, shared with the
+ * bell). Sales data stays in Recent Sales; inventory value at cost joins
+ * the picture.
+ */
 export default function DashboardOverviewPage() {
   return (
     <div className="mx-auto max-w-6xl">
@@ -21,7 +30,9 @@ export default function DashboardOverviewPage() {
 
       <div className="flex flex-col gap-4 sm:gap-5">
         <KpiCards />
+        <AttentionCard />
         <RecentSales />
+        <InventoryValueCard />
       </div>
     </div>
   );
