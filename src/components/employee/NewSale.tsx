@@ -21,11 +21,11 @@ import { seedProductExtras } from "@/lib/mock-data";
 import { useCustomers } from "@/lib/customers-store";
 import { currentEmployeeName } from "@/lib/employee-session";
 import { recordActivity } from "@/lib/activity-store";
-import { recordCompletedSale } from "@/lib/employee-transactions";
 import { stockStatus } from "@/lib/stock-level";
+import { processSaleCompleted } from "@/lib/domain/automation";
+import { buildReceiptData } from "@/lib/domain/receipt";
 import {
   addItemToSale,
-  completeSaleDraft,
   formatSaleMoney,
   removeSaleItem,
   saleBalance,
@@ -607,29 +607,46 @@ function PaymentSection() {
 
 function CurrentSalePanel({ onComplete }: { onComplete: (sale: CompletedSale) => void }) {
   const draft = useSaleDraft();
+  const { products, updateProduct } = useProducts();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [discountOpen, setDiscountOpen] = useState(false);
 
+  /**
+   * Repository adapter for the automation engine: persists one product's
+   * new stock via the existing optimistic store (local today, database
+   * update in the backend phase — the engine logic never changes).
+   */
+  function applyDeductedStock(productId: string, newStock: number): void {
+    const product = products.find((p) => p.id === productId);
+    if (!product) return;
+    void updateProduct(productId, {
+      name: product.name,
+      price: product.price,
+      stock: newStock,
+      imageUrl: product.imageUrl,
+    });
+  }
+
   async function handleComplete() {
     setBusy(true);
     setError(null);
-    // Let React paint the busy state before the (synchronous) completion.
+    // Let React paint the busy state before processing.
     await Promise.resolve();
-    const result = completeSaleDraft(currentEmployeeName());
+    // ONE automation path (Phase 4): validation, inventory, transaction,
+    // customer history, metrics, activity, threshold checks, receipt data —
+    // all inside processSaleCompleted. The UI only reports the outcome.
+    const result = await processSaleCompleted({
+      draft,
+      catalog: products,
+      actor: currentEmployeeName(),
+      applyStockChange: applyDeductedStock,
+    });
     setBusy(false);
     if (result.kind === "error") {
       setError(result.message);
       return;
     }
-    recordCompletedSale(result.sale);
-    recordActivity({
-      kind: "sale_completed",
-      actor: result.sale.employeeName,
-      label: `completed sale ${result.sale.reference}`,
-      saleRef: result.sale.reference,
-      customerId: result.sale.customerId ?? undefined,
-    });
     onComplete(result.sale);
   }
 
@@ -902,86 +919,76 @@ export function ReceiptBody({ sale }: { sale: CompletedSale }) {
   );
 }
 
+/**
+ * Renders the structured ReceiptData produced by the automation engine
+ * (buildReceiptData) — the single receipt calculation source (spec §12).
+ */
 export function ReceiptDetails({ sale }: { sale: CompletedSale }) {
+  const data = buildReceiptData(sale);
   return (
     <div className="text-sm">
-      <ReceiptMeta sale={sale} />
-      <ReceiptItems sale={sale} />
-      <ReceiptTotals sale={sale} />
-    </div>
-  );
-}
+      {/* Business header */}
+      <div className="border-b border-dashed border-zinc-200 pb-2 text-center">
+        <p className="text-base font-semibold text-zinc-900">{data.business.name}</p>
+        {data.business.phone ? (
+          <p className="text-xs text-zinc-500">{data.business.phone}</p>
+        ) : null}
+      </div>
 
-function ReceiptMeta({ sale }: { sale: CompletedSale }) {
-  const methodLabel =
-    sale.method === "cash"
-      ? "Cash"
-      : sale.method === "transfer"
-        ? "Bank Transfer"
-        : sale.method === "pos"
-          ? "POS"
-          : sale.method === "other"
-            ? "Other"
-            : null;
-  return (
-    <div className="space-y-0.5 border-b border-dashed border-zinc-200 pb-2 text-xs text-zinc-500">
-      <p>Ref: {sale.reference}</p>
-      <p>Date: {new Date(sale.completedAt).toLocaleString("en-US")}</p>
-      <p>Served by: {sale.employeeName}</p>
-      <p>Customer: {sale.customerName}</p>
-      {sale.customerPhone ? <p>Phone: {sale.customerPhone}</p> : null}
-      {methodLabel ? <p>Method: {methodLabel}</p> : null}
-    </div>
-  );
-}
+      {/* Transaction + customer meta */}
+      <div className="space-y-0.5 border-b border-dashed border-zinc-200 py-2 text-xs text-zinc-500">
+        <p>Ref: {data.transaction.reference}</p>
+        <p>Date: {new Date(data.transaction.dateTime).toLocaleString("en-US")}</p>
+        <p>Served by: {data.transaction.employeeName}</p>
+        <p>Customer: {data.customer.name}</p>
+        {data.customer.phone ? <p>Phone: {data.customer.phone}</p> : null}
+        {data.payment.methodLabel ? <p>Method: {data.payment.methodLabel}</p> : null}
+      </div>
 
-function ReceiptItems({ sale }: { sale: CompletedSale }) {
-  return (
-    <ul className="space-y-1 border-b border-dashed border-zinc-200 py-2">
-      {sale.items.map((i) => (
-        <li key={i.productId} className="flex justify-between gap-3">
-          <span className="min-w-0">
-            <span className="block truncate font-medium text-zinc-900">{i.name}</span>
-            <span className="block text-xs tabular-nums text-zinc-500">
-              {i.quantity} × {formatSaleMoney(i.unitPrice)}
+      {/* Items */}
+      <ul className="space-y-1 border-b border-dashed border-zinc-200 py-2">
+        {data.items.map((i) => (
+          <li key={i.name} className="flex justify-between gap-3">
+            <span className="min-w-0">
+              <span className="block truncate font-medium text-zinc-900">{i.name}</span>
+              <span className="block text-xs tabular-nums text-zinc-500">
+                {i.quantity} × {formatSaleMoney(i.unitPrice)}
+              </span>
             </span>
-          </span>
-          <span className="tabular-nums">{formatSaleMoney(i.unitPrice * i.quantity)}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
+            <span className="tabular-nums">{formatSaleMoney(i.lineTotal)}</span>
+          </li>
+        ))}
+      </ul>
 
-function ReceiptTotals({ sale }: { sale: CompletedSale }) {
-  return (
-    <div className="space-y-1 pt-2">
-      <div className="flex justify-between text-zinc-600">
-        <span>Subtotal</span>
-        <span className="tabular-nums">{formatSaleMoney(sale.subtotal)}</span>
-      </div>
-      {sale.discountAmount > 0 ? (
-        <div className="flex justify-between text-amber-700">
-          <span>Discount{sale.discountPercent ? ` (${sale.discountPercent}%)` : ""}</span>
-          <span className="tabular-nums">−{formatSaleMoney(sale.discountAmount)}</span>
+      {/* Totals — straight from the structured data */}
+      <div className="space-y-1 pt-2">
+        <div className="flex justify-between text-zinc-600">
+          <span>Subtotal</span>
+          <span className="tabular-nums">{formatSaleMoney(data.subtotal)}</span>
         </div>
-      ) : null}
-      <div className="flex justify-between border-t border-zinc-200 pt-1 font-semibold text-zinc-900">
-        <span>Total</span>
-        <span className="tabular-nums">{formatSaleMoney(sale.total)}</span>
-      </div>
-      <div className="flex justify-between text-zinc-600">
-        <span className="capitalize">
-          Payment: {sale.paymentStatus === "part" ? "Part-paid" : sale.paymentStatus}
-        </span>
-        <span className="tabular-nums">{formatSaleMoney(sale.amountPaid)}</span>
-      </div>
-      {sale.balance > 0 ? (
-        <div className="flex justify-between font-medium text-amber-700">
-          <span>Balance due</span>
-          <span className="tabular-nums">{formatSaleMoney(sale.balance)}</span>
+        {data.discountAmount > 0 ? (
+          <div className="flex justify-between text-amber-700">
+            <span>
+              Discount{data.discountPercent ? ` (${data.discountPercent}%)` : ""}
+            </span>
+            <span className="tabular-nums">−{formatSaleMoney(data.discountAmount)}</span>
+          </div>
+        ) : null}
+        <div className="flex justify-between border-t border-zinc-200 pt-1 font-semibold text-zinc-900">
+          <span>Total</span>
+          <span className="tabular-nums">{formatSaleMoney(data.total)}</span>
         </div>
-      ) : null}
+        <div className="flex justify-between text-zinc-600">
+          <span>Payment: {data.payment.statusLabel}</span>
+          <span className="tabular-nums">{formatSaleMoney(data.payment.amountPaid)}</span>
+        </div>
+        {data.payment.balance > 0 ? (
+          <div className="flex justify-between font-medium text-amber-700">
+            <span>Balance due</span>
+            <span className="tabular-nums">{formatSaleMoney(data.payment.balance)}</span>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -22,6 +22,7 @@ import { CustomerFormModal } from "@/components/customers/CustomerFormModal";
 import { DeleteCustomerDialog } from "@/components/customers/DeleteCustomerDialog";
 import { useCustomers } from "@/lib/customers-store";
 import { useInvoices } from "@/lib/invoices-store";
+import { useCustomerHistory } from "@/lib/domain/customer-history";
 import { formatCurrencyPrecise, formatDate } from "@/lib/utils";
 import { effectiveStatus, invoiceAmount, formatDueIn } from "@/lib/invoice-utils";
 import {
@@ -43,6 +44,13 @@ export default function CustomerDetailsPage({ params }: CustomerDetailsPageProps
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const customer = customers.find((c) => c.id === id);
+
+  // Employee-sale history (Phase 4 automation attaches purchases
+  // automatically). Hooks run before any early return.
+  const history = useCustomerHistory();
+  const sales = history
+    .filter((p) => p.customerId === id)
+    .sort((a, b) => b.at.localeCompare(a.at));
 
   if (!customer) {
     return (
@@ -246,6 +254,21 @@ export default function CustomerDetailsPage({ params }: CustomerDetailsPageProps
           <h2 className="text-sm font-semibold text-zinc-900">Purchase History</h2>
         </div>
         <ul className="divide-y divide-zinc-100">
+          {sales.map((p) => (
+            <li key={p.id} className="flex items-center gap-4 px-5 py-3.5">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-zinc-900">
+                  {p.items.map((i) => `${i.name} × ${i.quantity}`).join(", ")}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-zinc-500">
+                  {formatDate(p.at)} · {p.saleRef} · {p.paymentStatus === "part" ? "Part-paid" : p.paymentStatus === "paid" ? "Paid" : "Unpaid"}
+                </p>
+              </div>
+              <p className="text-sm font-medium tabular-nums text-zinc-900">
+                {formatCurrencyPrecise(p.total)}
+              </p>
+            </li>
+          ))}
           {purchases.map((p) => (
             <li key={p.key} className="flex items-center gap-4 px-5 py-3.5">
               <div className="min-w-0 flex-1">
@@ -259,7 +282,7 @@ export default function CustomerDetailsPage({ params }: CustomerDetailsPageProps
               </p>
             </li>
           ))}
-          {purchases.length === 0 ? (
+          {purchases.length === 0 && sales.length === 0 ? (
             <li className="px-5 py-8 text-center text-sm text-zinc-500">
               No purchases yet.
             </li>

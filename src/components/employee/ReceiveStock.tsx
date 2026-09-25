@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { useProducts } from "@/lib/products-store";
 import { recordStockReceipt } from "@/lib/stock-level";
-import { recordActivity } from "@/lib/activity-store";
+import { processStockReceived } from "@/lib/domain/automation";
 import { currentEmployeeName } from "@/lib/employee-session";
 
 /**
@@ -35,26 +35,30 @@ export function ReceiveStock() {
   async function confirm() {
     if (!picked || qty <= 0) return;
     setBusy(true);
-    await updateProduct(picked.id, {
-      name: picked.name,
-      price: picked.price,
-      stock: picked.stock + qty,
-      imageUrl: picked.imageUrl,
+    // ONE automation path (Phase 4): stock increase, activity, and the
+    // low/out-of-stock condition re-check all live in processStockReceived.
+    const result = await processStockReceived({
+      product: picked,
+      quantity: qty,
+      actor: currentEmployeeName(),
+      applyStockChange: async (productId, newStock) => {
+        await updateProduct(productId, {
+          name: picked.name,
+          price: picked.price,
+          stock: newStock,
+          imageUrl: picked.imageUrl,
+        });
+      },
     });
+    setBusy(false);
+    if (result.kind === "error") return; // picked/qty guards make this unreachable today
     recordStockReceipt({
       productId: picked.id,
       productName: picked.name,
       quantity: qty,
       actor: currentEmployeeName(),
     });
-    recordActivity({
-      kind: "stock_received",
-      actor: currentEmployeeName(),
-      label: `received ${qty} × ${picked.name}`,
-      productId: picked.id,
-    });
-    setBusy(false);
-    setDone({ name: picked.name, added: qty, newStock: picked.stock + qty });
+    setDone({ name: picked.name, added: qty, newStock: result.newStock });
     setPickedId(null);
     setQty(1);
     setQuery("");

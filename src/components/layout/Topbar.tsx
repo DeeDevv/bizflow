@@ -21,7 +21,7 @@ import { initialsFromEmail } from "@/lib/utils";
 
 type Notification = {
   id: string;
-  kind: "invoice" | "stock";
+  kind: "invoice" | "stock" | "balance";
   title: string;
   detail: string;
   href: string;
