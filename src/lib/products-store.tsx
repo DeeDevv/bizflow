@@ -126,6 +126,13 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
         setError(null);
         return result.product;
       }
+      // Demo mode (no Supabase configured): the optimistic update is the
+      // record — keep it so local workflows (e.g. Receive Stock) persist.
+      if (result.kind === "no-config") {
+        const local = products.find((p) => p.id === id) ?? null;
+        setError(null);
+        return local;
+      }
       if (previous) {
         setProducts((prev) => prev.map((p) => (p.id === id ? previous : p)));
       }

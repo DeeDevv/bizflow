@@ -30,54 +30,96 @@ export const businessInfo: BusinessInfo = {
 export const seedProducts: Product[] = [
   {
     id: "prd-01",
-    name: "Website Design Package",
-    price: 7400,
-    stock: 8,
+    name: "Hisense 1HP Inverter AC",
+    price: 550000,
+    stock: 10,
     imageUrl: "",
   },
   {
     id: "prd-02",
-    name: "E-commerce Build",
-    price: 18700,
-    stock: 5,
+    name: "Hisense 1.5HP Inverter AC",
+    price: 720000,
+    stock: 4,
     imageUrl: "",
   },
   {
     id: "prd-03",
-    name: "CRM Migration",
-    price: 8200,
-    stock: 0,
+    name: 'Samsung 55" TV',
+    price: 850000,
+    stock: 6,
     imageUrl: "",
   },
   {
     id: "prd-04",
-    name: "Staff Training Day",
-    price: 1600,
-    stock: 24,
+    name: "Hisense Chest Freezer 150L",
+    price: 285000,
+    stock: 8,
     imageUrl: "",
   },
   {
     id: "prd-05",
-    name: "Fleet Tracking — Vehicle Module",
-    price: 3600,
-    stock: 12,
+    name: "LG Refrigerator 300L",
+    price: 495000,
+    stock: 2,
     imageUrl: "",
   },
   {
     id: "prd-06",
-    name: "Brand Refresh Package",
-    price: 6200,
-    stock: 3,
+    name: 'Samsung 43" TV',
+    price: 480000,
+    stock: 0,
     imageUrl: "",
   },
   {
     id: "prd-07",
-    name: "IT Health Check",
-    price: 950,
-    stock: 40,
+    name: "Thermocool Generator 2.5KVA",
+    price: 195000,
+    stock: 5,
     imageUrl: "",
   },
 ];
+
+/** Extended catalog info shown in employee search and inventory (mock). */
+export const seedProductExtras: Record<
+  string,
+  { code: string; category: string; brand: string }
+> = {
+  "Hisense 1HP Inverter AC": {
+    code: "AS12TG1",
+    category: "Air Conditioners",
+    brand: "Hisense",
+  },
+  "Hisense 1.5HP Inverter AC": {
+    code: "AS18TG1",
+    category: "Air Conditioners",
+    brand: "Hisense",
+  },
+  'Samsung 55" TV': {
+    code: "UA55TUE70",
+    category: "Televisions",
+    brand: "Samsung",
+  },
+  "Hisense Chest Freezer 150L": {
+    code: "BD150",
+    category: "Freezers",
+    brand: "Hisense",
+  },
+  "LG Refrigerator 300L": {
+    code: "GLR300",
+    category: "Refrigerators",
+    brand: "LG",
+  },
+  'Samsung 43" TV': {
+    code: "UA43TUE70",
+    category: "Televisions",
+    brand: "Samsung",
+  },
+  "Thermocool Generator 2.5KVA": {
+    code: "GEN25",
+    category: "Generators",
+    brand: "Thermocool",
+  },
+};
 
 /* ------------------------------------------------------------------ */
 /* Customers                                                           */

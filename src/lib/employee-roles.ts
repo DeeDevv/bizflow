@@ -53,33 +53,34 @@ export interface RoleTask {
 /** The Employee Home shortcuts per role — the role-based UI foundation. */
 export const ROLE_TASKS: Record<EmployeeRole, RoleTask[]> = {
   cashier: [
-    { label: "New Sale", description: "Record a sale and take payment", href: "/dashboard/invoices/new" },
-    { label: "Transactions", description: "Sales and invoices you've recorded", href: "/dashboard/invoices" },
+    { label: "New Sale", description: "Record a sale and take payment", href: "/dashboard/employee/sale" },
+    { label: "Transactions", description: "Sales you've completed", href: "/dashboard/employee/transactions" },
     { label: "Customers", description: "Look up customer details", href: "/dashboard/customers" },
-    { label: "My Activity", description: "Everything you did today" },
+    { label: "My Activity", description: "Everything you did today", href: "/dashboard/employee/activity" },
   ],
   sales: [
-    { label: "New Sale", description: "Record a sale and take payment", href: "/dashboard/invoices/new" },
-    { label: "Transactions", description: "Sales and invoices you've recorded", href: "/dashboard/invoices" },
+    { label: "New Sale", description: "Record a sale and take payment", href: "/dashboard/employee/sale" },
+    { label: "Transactions", description: "Sales you've completed", href: "/dashboard/employee/transactions" },
     { label: "Customers", description: "Look up customer details", href: "/dashboard/customers" },
-    { label: "My Activity", description: "Everything you did today" },
+    { label: "My Activity", description: "Everything you did today", href: "/dashboard/employee/activity" },
   ],
   inventory: [
-    { label: "Receive Stock", description: "Add newly delivered products" },
-    { label: "Inventory", description: "Check quantities and stock levels", href: "/dashboard/products" },
+    { label: "Receive Stock", description: "Record products that just arrived", href: "/dashboard/employee/receive-stock" },
+    { label: "Inventory", description: "Check quantities and stock levels", href: "/dashboard/employee/inventory" },
     { label: "Stock Issues", description: "Report damaged or missing items" },
-    { label: "My Activity", description: "Everything you did today" },
+    { label: "My Activity", description: "Everything you did today", href: "/dashboard/employee/activity" },
   ],
   manager: [
-    { label: "Overview", description: "How the business is doing today", href: "/dashboard" },
-    { label: "Transactions", description: "Sales and invoices", href: "/dashboard/invoices" },
-    { label: "Inventory", description: "Quantities and stock levels", href: "/dashboard/products" },
-    { label: "My Activity", description: "Everything you did today" },
+    { label: "Sales", description: "How the business is selling", href: "/dashboard/sales" },
+    { label: "Inventory", description: "Quantities and stock levels", href: "/dashboard/employee/inventory" },
+    { label: "Staff", description: "Who's working today" },
+    { label: "Customers", description: "Look up customer details", href: "/dashboard/customers" },
+    { label: "Reports", description: "Business performance summaries" },
   ],
   service: [
     { label: "Today's Jobs", description: "Repairs and service visits for today" },
     { label: "Customers", description: "Look up customer details", href: "/dashboard/customers" },
     { label: "My Tasks", description: "What's assigned to you" },
-    { label: "My Activity", description: "Everything you did today" },
+    { label: "My Activity", description: "Everything you did today", href: "/dashboard/employee/activity" },
   ],
 };

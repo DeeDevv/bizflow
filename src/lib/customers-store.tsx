@@ -94,6 +94,14 @@ export function CustomersProvider({ children }: { children: React.ReactNode }) {
         setError(null);
         return saved;
       }
+      // Demo mode (no Supabase configured): keep the local record so
+      // workflows like the in-sale quick-add keep working on mock data.
+      if (result.kind === "no-config") {
+        const local: Customer = { id: tempId, ...input };
+        setCustomers((prev) => prev.map((c) => (c.id === tempId ? local : c)));
+        setError(null);
+        return local;
+      }
       // Roll back and surface the error (message shown by the caller/page).
       setCustomers((prev) => prev.filter((c) => c.id !== tempId));
       if (result.kind === "error") setError(result.message);
