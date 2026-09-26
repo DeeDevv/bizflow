@@ -104,7 +104,7 @@ src/
 │       └── settings/page.tsx             # Business Settings (details, currency, logo, discounts)
 ├── components/
 │   ├── layout/                           # Sidebar, Topbar, MobileNav, NavLinks, Brand
-│   ├── dashboard/                        # CommandCenter (owner overview)
+│   ├── dashboard/                        # CommandCenter, EndOfDayReport (owner overview + daily report)
 │   ├── customers/                        # CustomerFormModal, DeleteCustomerDialog
 │   ├── products/                         # ProductFormModal, DeleteProductDialog
 │   ├── invoices/                         # InvoiceForm (create + edit wizard)

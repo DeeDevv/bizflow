@@ -107,18 +107,28 @@ function QuickActions() {
     { label: "Add employee", href: "/dashboard/settings", icon: UserPlus },
   ];
   return (
-    <nav aria-label="Quick actions" className="flex flex-wrap gap-2">
-      {actions.map((a) => (
-        <Link
-          key={a.label}
-          href={a.href}
-          className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-surface px-3 py-2 text-sm font-medium text-zinc-700 shadow-card transition-colors hover:bg-zinc-50"
-        >
-          <a.icon aria-hidden className="h-4 w-4 text-zinc-400" />
-          {a.label}
-        </Link>
-      ))}
-    </nav>
+    <div>
+      <nav aria-label="Quick actions" className="flex flex-wrap gap-2">
+        {actions.map((a) => (
+          <Link
+            key={a.label}
+            href={a.href}
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-surface px-3 py-2 text-sm font-medium text-zinc-700 shadow-card transition-colors hover:bg-zinc-50"
+          >
+            <a.icon aria-hidden className="h-4 w-4 text-zinc-400" />
+            {a.label}
+          </Link>
+        ))}
+      </nav>
+      <Link
+        href="/dashboard/report"
+        className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-brand-600 hover:text-brand-700"
+      >
+        <ClipboardList aria-hidden className="h-4 w-4" />
+        View Today&apos;s Report
+        <ArrowRight aria-hidden className="h-3.5 w-3.5" />
+      </Link>
+    </div>
   );
 }
 

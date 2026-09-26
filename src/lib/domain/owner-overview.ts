@@ -7,9 +7,10 @@ import { useStockMovements } from "./stock-movements";
 import { useActivity } from "../activity-store";
 import { useProducts } from "../products-store";
 import { stockStatus, lowStockThreshold } from "./stock-state";
-import { productCostPrice } from "../product-meta";
+import { productCostPrice, productCategory } from "../product-meta";
 import { getBusinessInfo } from "../business-store";
 import { formatMoneyWhole } from "../currency-symbol";
+import type { Product } from "../types";
 
 /**
  * Owner Command Center data (Phase 6).
@@ -90,51 +91,61 @@ export interface InventorySnapshot {
   value: { total: number; priced: number; missing: number } | null;
 }
 
+/**
+ * The ONE inventory-snapshot calculation. Consumed by the Phase 6 Command
+ * Center AND the Phase 7 End-of-Day Report, so totals can never disagree
+ * (spec: fix the shared calculation, never patch a view independently).
+ * Stock status comes from the single stock-state source.
+ */
+export function computeInventorySnapshot(products: Product[]): InventorySnapshot {
+  let totalUnits = 0;
+  let lowCount = 0;
+  let outCount = 0;
+  let value = 0;
+  let priced = 0;
+  const lowProducts: InventoryAttentionProduct[] = [];
+  const outProducts: InventoryAttentionProduct[] = [];
+  const categories = new Set<string>();
+
+  for (const p of products) {
+    totalUnits += p.stock;
+    categories.add(productCategory(p.name));
+    const status = stockStatus(p);
+    if (status === "out") {
+      outCount += 1;
+      outProducts.push({ id: p.id, name: p.name, stock: p.stock, threshold: lowStockThreshold(p) });
+    } else if (status === "low") {
+      lowCount += 1;
+      lowProducts.push({ id: p.id, name: p.name, stock: p.stock, threshold: lowStockThreshold(p) });
+    }
+    const cost = productCostPrice(p.name);
+    if (cost !== null) {
+      value += cost * p.stock;
+      priced += 1;
+    }
+  }
+
+  lowProducts.sort((a, b) => a.stock - b.stock);
+  outProducts.sort((a, b) => a.name.localeCompare(b.name));
+
+  return {
+    totalProducts: products.length,
+    totalUnits,
+    lowCount,
+    outCount,
+    lowProducts,
+    outProducts,
+    value:
+      products.length === 0 || priced === 0
+        ? null
+        : { total: value, priced, missing: products.length - priced },
+  };
+}
+
 export function useInventorySnapshot(): InventorySnapshot {
   const { products } = useProducts();
 
-  return useMemo(() => {
-    let totalUnits = 0;
-    let lowCount = 0;
-    let outCount = 0;
-    let value = 0;
-    let priced = 0;
-    const lowProducts: InventoryAttentionProduct[] = [];
-    const outProducts: InventoryAttentionProduct[] = [];
-
-    for (const p of products) {
-      totalUnits += p.stock;
-      const status = stockStatus(p);
-      if (status === "out") {
-        outCount += 1;
-        outProducts.push({ id: p.id, name: p.name, stock: p.stock, threshold: lowStockThreshold(p) });
-      } else if (status === "low") {
-        lowCount += 1;
-        lowProducts.push({ id: p.id, name: p.name, stock: p.stock, threshold: lowStockThreshold(p) });
-      }
-      const cost = productCostPrice(p.name);
-      if (cost !== null) {
-        value += cost * p.stock;
-        priced += 1;
-      }
-    }
-
-    lowProducts.sort((a, b) => a.stock - b.stock);
-    outProducts.sort((a, b) => a.name.localeCompare(b.name));
-
-    return {
-      totalProducts: products.length,
-      totalUnits,
-      lowCount,
-      outCount,
-      lowProducts,
-      outProducts,
-      value:
-        products.length === 0 || priced === 0
-          ? null
-          : { total: value, priced, missing: products.length - priced },
-    };
-  }, [products]);
+  return useMemo(() => computeInventorySnapshot(products), [products]);
 }
 
 /* ---------------- Today's sales preview (spec §18, §19) ---------------- */
