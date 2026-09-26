@@ -5,6 +5,7 @@ import { useProducts } from "@/lib/products-store";
 import { useInvoices } from "@/lib/invoices-store";
 import { effectiveStatus } from "@/lib/invoice-utils";
 import { useActiveNotifications } from "@/lib/domain/notifications";
+import { stockStatus } from "@/lib/domain/stock-state";
 
 /**
  * "What needs my attention?" — the single source behind the Topbar bell and
@@ -14,11 +15,16 @@ import { useActiveNotifications } from "@/lib/domain/notifications";
  * (low-stock/out-of-stock transitions, outstanding balances — spam-proof,
  * idempotent per condition). Overdue invoices stay computed live here
  * (date-driven, no event needed). BizMate notices; the owner reads.
+ *
+ * The live stock fallback uses the SAME stock-state thresholds as the
+ * engine (Phase 5 consolidation) — no second algorithm.
  */
 
 export type AttentionItem = {
   id: string;
   kind: "invoice" | "stock" | "balance";
+  /** Clear priority label, not a numeric score: out-of-stock is critical. */
+  severity?: "critical" | "important";
   title: string;
   detail: string;
   href: string;
@@ -34,9 +40,12 @@ export function useAttentionItems(): AttentionItem[] {
 
     // 1) Engine-raised condition notifications (deduped, resolved state-aware).
     for (const n of engineNotes) {
+      const subject = products.find((p) => p.id === n.subjectId);
       notes.push({
         id: n.id,
         kind: n.kind === "outstanding_balance" ? "balance" : "stock",
+        severity:
+          subject && stockStatus(subject) === "out" ? "critical" : "important",
         title: n.title,
         detail: n.detail,
         href: n.href,
@@ -57,27 +66,31 @@ export function useAttentionItems(): AttentionItem[] {
     }
 
     // 3) Live stock fallback so the bell is never empty on first load before
-    //    the engine has processed anything (same thresholds as the engine).
+    //    the engine has processed anything. Same stock-state logic as the
+    //    engine (single threshold source).
     for (const p of products) {
       const already = notes.some(
         (n) => n.kind === "stock" && n.title.startsWith(p.name),
       );
       if (already) continue;
-      if (p.stock <= 0) {
+      const status = stockStatus(p);
+      if (status === "out") {
         notes.push({
           id: "live-stock-" + p.id,
           kind: "stock",
+          severity: "critical",
           title: `${p.name} is out of stock`,
           detail: "Restock before selling more of this product.",
-          href: "/dashboard/employee/receive-stock",
+          href: `/dashboard/employee/inventory/${p.id}`,
         });
-      } else if (p.stock <= 5) {
+      } else if (status === "low") {
         notes.push({
           id: "live-stock-" + p.id,
           kind: "stock",
+          severity: "important",
           title: `${p.name} is running low`,
           detail: `Only ${p.stock} left in stock.`,
-          href: "/dashboard/employee/inventory",
+          href: `/dashboard/employee/inventory/${p.id}`,
         });
       }
     }
