@@ -35,6 +35,11 @@ import {
   useObservations,
   useTeamActivity,
 } from "@/lib/domain/owner-overview";
+import {
+  useDailyBusinessUpdate,
+  useReportReadyNotification,
+  type DailyUpdateLine,
+} from "@/lib/domain/daily-update";
 
 /**
  * Owner Command Center (Phase 6).
@@ -94,6 +99,112 @@ function CommandCenterHeader({ attentionCount }: { attentionCount: number }) {
         </p>
       ) : null}
     </header>
+  );
+}
+
+/* ---------------- Daily Business Update (Phase 8) ---------------- */
+
+const UPDATE_DOT: Record<DailyUpdateLine["severity"], string> = {
+  info: "bg-brand-500",
+  warning: "bg-amber-500",
+  critical: "bg-red-500",
+};
+
+function UpdateLine({ line }: { line: DailyUpdateLine }) {
+  return (
+    <li>
+      <Link
+        href={line.href}
+        className="flex items-start gap-2.5 px-5 py-2.5 hover:bg-zinc-50"
+      >
+        <span
+          aria-hidden
+          className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${UPDATE_DOT[line.severity]}`}
+        />
+        <span className="min-w-0 text-sm text-zinc-700">{line.text}</span>
+      </Link>
+    </li>
+  );
+}
+
+/**
+ * The owner's short morning summary (Phase 8): attention, outstanding,
+ * yesterday's received. Every figure comes from the shared domain
+ * calculations (see daily-update.ts) — this card only renders.
+ */
+function DailyBusinessUpdate() {
+  const update = useDailyBusinessUpdate();
+
+  // Pre-hydration (update === null): keep the card's space with the same
+  // height so layout doesn't shift when the real content arrives.
+  if (!update) {
+    return (
+      <Card className="min-h-[172px]" aria-hidden>
+        {""}
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader
+        title="Your day at a glance"
+        subtitle={`${update.dateLabel} · built from your own records`}
+        action={
+          <Link
+            href="/dashboard/report"
+            className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
+          >
+            View full report
+            <ArrowRight aria-hidden className="h-3.5 w-3.5" />
+          </Link>
+        }
+      />
+      <div className="border-t border-zinc-100">
+        <dl className="grid grid-cols-3 divide-x divide-zinc-100">
+          <div className="px-4 py-3">
+            <dt className="text-xs text-zinc-500">Needs attention</dt>
+            <dd
+              className={`mt-0.5 text-lg font-semibold tabular-nums ${
+                update.attentionCount > 0 ? "text-amber-700" : "text-zinc-900"
+              }`}
+            >
+              {update.attentionCount}
+            </dd>
+          </div>
+          <div className="px-4 py-3">
+            <dt className="text-xs text-zinc-500">Outstanding today</dt>
+            <dd className="mt-0.5 text-lg font-semibold tabular-nums text-zinc-900">
+              {money(update.outstandingToday)}
+            </dd>
+          </div>
+          <div className="px-4 py-3">
+            <dt className="text-xs text-zinc-500">Received yesterday</dt>
+            <dd className="mt-0.5 text-lg font-semibold tabular-nums text-zinc-900">
+              {update.hasYesterday ? money(update.yesterdayReceived) : "—"}
+            </dd>
+            <dd className="text-[11px] text-zinc-400">
+              {update.hasYesterday
+                ? `${update.yesterdayTransactions} ${
+                    update.yesterdayTransactions === 1 ? "transaction" : "transactions"
+                  }`
+                : "No sales yesterday"}
+            </dd>
+          </div>
+        </dl>
+        {update.attention.length > 0 ? (
+          <ul className="border-t border-zinc-100">
+            {update.attention.map((l) => (
+              <UpdateLine key={l.id} line={l} />
+            ))}
+          </ul>
+        ) : (
+          <p className="border-t border-zinc-100 px-5 py-3 text-sm text-zinc-500">
+            All quiet — nothing needs your attention this morning.
+          </p>
+        )}
+      </div>
+    </Card>
   );
 }
 
@@ -609,6 +720,11 @@ export function CommandCenter() {
   const kpis = useTodayKpis();
   const preview = useTodaySalesPreview();
 
+  // Report-ready is raised once per day, from the owner's home surface
+  // (idempotent per day — see useReportReadyNotification). No-op for an
+  // empty business.
+  useReportReadyNotification();
+
   const isEmptyBusiness =
     snapshot.totalProducts === 0 && !kpis.hasData && preview.transactionCount === 0;
 
@@ -623,6 +739,7 @@ export function CommandCenter() {
         </div>
       ) : (
         <div className="flex flex-col gap-4 sm:gap-5">
+          <DailyBusinessUpdate />
           <QuickActions />
           <KpiGrid />
           <NeedsAttention />

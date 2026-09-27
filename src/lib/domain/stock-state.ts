@@ -73,9 +73,12 @@ export function useStockStatus(product: Product): StockStatus {
 export function evaluateStockCondition(product: Product): StockStatus {
   const status = stockStatus(product);
   if (status === "low") {
+    // Low supersedes out, just as out supersedes low: a partial restock that
+    // lands in low territory retires the out-of-stock condition.
+    resolveNotification("out_of_stock", product.id);
     raiseNotification({
       kind: "low_stock",
-      level: "important",
+      severity: "warning",
       title: `${product.name} is running low`,
       detail: `Only ${product.stock} left in stock.`,
       href: "/dashboard/employee/inventory",
@@ -86,7 +89,7 @@ export function evaluateStockCondition(product: Product): StockStatus {
     resolveNotification("low_stock", product.id);
     raiseNotification({
       kind: "out_of_stock",
-      level: "important",
+      severity: "critical",
       title: `${product.name} is out of stock`,
       detail: "Restock before selling more of this product.",
       href: "/dashboard/employee/receive-stock",

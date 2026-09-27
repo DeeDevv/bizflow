@@ -2,12 +2,20 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Bell, LogOut, Menu, PackageSearch, ReceiptText, Search, Settings as SettingsIcon, Trash2, X } from "lucide-react";
+import { Bell, BellOff, ClipboardList, LogOut, Menu, PackageSearch, ReceiptText, Search, Settings as SettingsIcon, Trash2, X } from "lucide-react";
 import { MobileNav } from "./MobileNav";
 import { DeleteAccountDialog } from "@/components/auth/DeleteAccountDialog";
 import { useAuth } from "@/lib/auth-store";
 import { useBusiness } from "@/lib/business-store";
 import { useAttentionItems } from "@/lib/attention";
+import {
+  markAllNotificationsRead,
+  markNotificationRead,
+  useActiveNotifications,
+  useUnreadNotificationCount,
+  type BizMateNotification,
+} from "@/lib/domain/notifications";
+import { formatActivityTime } from "@/lib/activity-store";
 import { initialsFromEmail } from "@/lib/utils";
 
 /**
@@ -15,47 +23,60 @@ import { initialsFromEmail } from "@/lib/utils";
  *
  * The avatar shows the signed-in user's real initials (from their login
  * email — the same derivation as the sidebar footer) and links to Settings.
- * The bell opens a real notifications panel built from live business data:
- * overdue invoices and low/out-of-stock products.
+ *
+ * The bell (Phase 8) is the in-app channel over the REAL notification
+ * store: engine-raised conditions (deduped, idempotent), the daily
+ * report-ready notice, and the live stock/invoice fallback so the panel is
+ * never missing a condition the owner can already act on. The badge counts
+ * UNREAD notices; reading one stops it counting until its condition
+ * changes. Severity is clear labels — info, warning, critical — never
+ * numeric scores.
  */
 
-type Notification = {
-  id: string;
-  kind: "invoice" | "stock" | "balance";
-  title: string;
-  detail: string;
-  href: string;
+const SEVERITY_DOT: Record<BizMateNotification["severity"], string> = {
+  info: "bg-brand-500",
+  warning: "bg-amber-500",
+  critical: "bg-red-500",
 };
 
-function useNotifications(): Notification[] {
-  // Same data as the Overview attention card — one source, two views.
-  return useAttentionItems();
+function NotificationIcon({ n }: { n: BizMateNotification }) {
+  const cls = "mt-0.5 h-4 w-4 shrink-0";
+  if (n.kind === "report_ready")
+    return <ClipboardList aria-hidden className={`${cls} text-brand-500`} />;
+  if (n.kind === "outstanding_balance")
+    return <ReceiptText aria-hidden className={`${cls} text-amber-500`} />;
+  return <PackageSearch aria-hidden className={`${cls} text-brand-500`} />;
 }
 
 function NotificationsBell() {
   const [open, setOpen] = useState(false);
-  const notifications = useNotifications();
+  // The REAL notification records (engine conditions + report-ready).
+  const notifications = useActiveNotifications();
+  const unread = useUnreadNotificationCount();
+  // Live fallback keeps overdue invoices / stock conditions visible even
+  // before the engine has processed anything — same data as the attention
+  // card, one source, two views.
+  const attention = useAttentionItems();
+  const hasContent = notifications.length > 0 || attention.length > 0;
 
   return (
     <div className="relative">
       <button
         type="button"
         aria-label={
-          notifications.length > 0
-            ? `Notifications (${notifications.length})`
-            : "Notifications"
+          unread > 0 ? `Notifications, ${unread} unread` : "Notifications"
         }
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className="relative rounded-lg p-2 text-zinc-600 hover:bg-zinc-100"
       >
         <Bell aria-hidden className="h-5 w-5" />
-        {notifications.length > 0 ? (
+        {unread > 0 ? (
           <span
             aria-hidden
             className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white ring-2 ring-white"
           >
-            {notifications.length > 9 ? "9+" : notifications.length}
+            {unread > 9 ? "9+" : unread}
           </span>
         ) : null}
       </button>
@@ -71,18 +92,30 @@ function NotificationsBell() {
           >
             <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
               <p className="text-sm font-semibold text-zinc-900">Notifications</p>
-              <button
-                type="button"
-                aria-label="Close notifications"
-                onClick={() => setOpen(false)}
-                className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
-              >
-                <X aria-hidden className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                {unread > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => markAllNotificationsRead()}
+                    className="rounded-md px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50"
+                  >
+                    Mark all read
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  aria-label="Close notifications"
+                  onClick={() => setOpen(false)}
+                  className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+                >
+                  <X aria-hidden className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
-            {notifications.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-zinc-500">
+            {!hasContent ? (
+              <p className="flex flex-col items-center gap-2 px-4 py-6 text-center text-sm text-zinc-500">
+                <BellOff aria-hidden className="h-5 w-5 text-zinc-300" />
                 You’re all caught up — nothing needs attention.
               </p>
             ) : (
@@ -91,23 +124,72 @@ function NotificationsBell() {
                   <li key={n.id} className="border-b border-zinc-50 last:border-0">
                     <Link
                       href={n.href}
-                      onClick={() => setOpen(false)}
-                      className="flex gap-3 px-4 py-3 hover:bg-zinc-50"
+                      onClick={() => {
+                        markNotificationRead(n.id);
+                        setOpen(false);
+                      }}
+                      className={`flex gap-3 px-4 py-3 hover:bg-zinc-50 ${
+                        n.readAt == null ? "bg-brand-50/40" : ""
+                      }`}
                     >
-                      {n.kind === "invoice" ? (
-                        <ReceiptText aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                      ) : (
-                        <PackageSearch aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
-                      )}
+                      <NotificationIcon n={n} />
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium text-zinc-900">
-                          {n.title}
+                        <span className="flex items-center gap-1.5">
+                          <span
+                            aria-hidden
+                            className={`h-1.5 w-1.5 shrink-0 rounded-full ${SEVERITY_DOT[n.severity]}`}
+                          />
+                          <span
+                            className={`min-w-0 flex-1 truncate text-sm ${
+                              n.readAt == null
+                                ? "font-semibold text-zinc-900"
+                                : "font-medium text-zinc-600"
+                            }`}
+                          >
+                            {n.title}
+                          </span>
+                          {n.readAt == null ? (
+                            <span className="shrink-0 rounded-full bg-brand-100 px-1.5 text-[10px] font-semibold text-brand-700">
+                              New
+                            </span>
+                          ) : null}
                         </span>
                         <span className="mt-0.5 block text-xs text-zinc-500">{n.detail}</span>
+                        <span className="mt-0.5 block text-[10px] tabular-nums text-zinc-400">
+                          {formatActivityTime(n.updatedAt)}
+                        </span>
                       </span>
                     </Link>
                   </li>
                 ))}
+                {attention
+                  .filter(
+                    (a) =>
+                      !notifications.some(
+                        (n) => n.href === a.href && n.title === a.title,
+                      ),
+                  )
+                  .map((a) => (
+                    <li key={a.id} className="border-b border-zinc-50 last:border-0">
+                      <Link
+                        href={a.href}
+                        onClick={() => setOpen(false)}
+                        className="flex gap-3 px-4 py-3 hover:bg-zinc-50"
+                      >
+                        {a.kind === "invoice" ? (
+                          <ReceiptText aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                        ) : (
+                          <PackageSearch aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
+                        )}
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-zinc-900">
+                            {a.title}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-zinc-500">{a.detail}</span>
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
               </ul>
             )}
           </div>

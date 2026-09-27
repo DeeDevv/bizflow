@@ -16,6 +16,12 @@ import { stockStatus } from "@/lib/domain/stock-state";
  * idempotent per condition). Overdue invoices stay computed live here
  * (date-driven, no event needed). BizMate notices; the owner reads.
  *
+ * Phase 8: severity now comes from the notification record itself
+ * (report ready = info, low stock = warning, out of stock = critical) —
+ * one severity source, not a per-view re-derivation. Report-ready notices
+ * are informational, not conditions, so they don't appear here (they show
+ * in the bell with their own info styling and in the Daily Business Update).
+ *
  * The live stock fallback uses the SAME stock-state thresholds as the
  * engine (Phase 5 consolidation) — no second algorithm.
  */
@@ -39,13 +45,20 @@ export function useAttentionItems(): AttentionItem[] {
     const notes: AttentionItem[] = [];
 
     // 1) Engine-raised condition notifications (deduped, resolved state-aware).
+    //    Severity was decided once, by the engine, when the condition was raised.
     for (const n of engineNotes) {
+      if (n.kind === "report_ready") continue; // informational, not a condition
       const subject = products.find((p) => p.id === n.subjectId);
       notes.push({
         id: n.id,
         kind: n.kind === "outstanding_balance" ? "balance" : "stock",
+        // A stock condition record whose product is NOW out is critical even
+        // if the stored notice was raised as low-stock warning.
         severity:
-          subject && stockStatus(subject) === "out" ? "critical" : "important",
+          n.severity === "critical" ||
+          (subject && stockStatus(subject) === "out")
+            ? "critical"
+            : "important",
         title: n.title,
         detail: n.detail,
         href: n.href,

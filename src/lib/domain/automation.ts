@@ -261,7 +261,7 @@ export async function processSaleCompleted(
   if (sale.balance > 0 && sale.customerId) {
     raiseNotification({
       kind: "outstanding_balance",
-      level: "important",
+      severity: "warning",
       title: `${sale.customerName} owes ${sale.balance.toLocaleString("en-US")}`,
       detail: `Sale ${sale.reference} has an outstanding balance.`,
       href: "/dashboard/employee/transactions",

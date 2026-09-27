@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Globe, ImagePlus, Trash2 } from "lucide-react";
+import { Check, Globe, ImagePlus, Sparkles, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useBusiness } from "@/lib/business-store";
 import { loadBusiness, saveBusiness } from "@/lib/business-db";
 import { cn, isValidWebsiteUrl, normalizeWebsiteUrl } from "@/lib/utils";
 import { CURRENCIES } from "@/lib/currencies";
+import { AUTOMATION_RULES } from "@/lib/domain/automation-rules";
 
 const field =
   "mt-1.5 w-full rounded-lg border border-zinc-300 bg-surface px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20";
@@ -542,6 +543,58 @@ export default function BusinessSettingsPage() {
           </div>
         </div>
       </form>
+
+      {/* How BizMate works for you (Phase 8): the WHEN/CHECK/DO structure,
+          in owner words. Read-only — the active rules ARE the engine's real
+          behavior, not settings; the rest are part of the design, honestly
+          marked as coming later. */}
+      <Card className="mt-5 p-5 sm:p-6">
+        <div className="flex items-center gap-2">
+          <Sparkles aria-hidden className="h-4 w-4 text-brand-500" />
+          <h2 className="text-sm font-semibold text-zinc-900">
+            How BizMate works for you
+          </h2>
+        </div>
+        <p className="mt-1 text-sm text-zinc-500">
+          The rules BizMate follows — when something happens, what it checks
+          against your own setup, and what it does about it.
+        </p>
+        <ul className="mt-4 divide-y divide-zinc-100">
+          {AUTOMATION_RULES.map((rule) => (
+            <li key={rule.id} className="py-3 first:pt-0 last:pb-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-zinc-900">{rule.name}</p>
+                  <p className="mt-0.5 text-xs leading-5 text-zinc-500">
+                    <span className="font-semibold text-zinc-700">When</span> {rule.trigger}
+                    {rule.status === "active" ? (
+                      <>
+                        , <span className="font-semibold text-zinc-700">check</span>{" "}
+                        {rule.check}
+                      </>
+                    ) : null}
+                    , <span className="font-semibold text-zinc-700">BizMate will</span>{" "}
+                    {rule.action}.
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                    rule.status === "active"
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-zinc-100 text-zinc-500"
+                  }`}
+                >
+                  {rule.status === "active" ? "Always on" : "Coming later"}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 border-t border-zinc-100 pt-3 text-xs text-zinc-400">
+          Alerts reach you in your BizMate notifications today. WhatsApp and
+          email delivery are planned for a later phase.
+        </p>
+      </Card>
     </div>
   );
 }
