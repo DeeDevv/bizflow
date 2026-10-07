@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Globe, ImagePlus, Sparkles, Trash2 } from "lucide-react";
+import { Check, Globe, ImagePlus, MapPin, Sparkles, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useBusiness } from "@/lib/business-store";
 import { loadBusiness, saveBusiness } from "@/lib/business-db";
+import { useSetup } from "@/lib/setup-store";
 import { cn, isValidWebsiteUrl, normalizeWebsiteUrl } from "@/lib/utils";
 import { CURRENCIES } from "@/lib/currencies";
 import { AUTOMATION_RULES } from "@/lib/domain/automation-rules";
+import { capturePosition } from "@/lib/domain/attendance";
 
 const field =
   "mt-1.5 w-full rounded-lg border border-zinc-300 bg-surface px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20";
@@ -62,6 +64,33 @@ function Toggle({
 
 export default function BusinessSettingsPage() {
   const { business, updateBusiness } = useBusiness();
+  const { setup, setWorkplace } = useSetup();
+
+  // Workplace Attendance Verification (Phase 8.5, spec §3): the owner
+  // registers WHERE work happens, and how far "at work" may be.
+  const [locBusy, setLocBusy] = useState(false);
+  const [locMsg, setLocMsg] = useState<string | null>(null);
+  const workplace = setup.workplace;
+
+  async function captureWorkplace() {
+    setLocBusy(true);
+    setLocMsg(null);
+    const position = await capturePosition();
+    setLocBusy(false);
+    if (!position.ok) {
+      setLocMsg(
+        "Could not capture your location — allow location access and try again.",
+      );
+      return;
+    }
+    setWorkplace({
+      lat: position.latitude,
+      lng: position.longitude,
+      radiusMeters: workplace?.radiusMeters ?? 100,
+      capturedAt: new Date().toISOString(),
+    });
+    setLocMsg("Workplace location saved.");
+  }
 
   const [name, setName] = useState(business.name);
   const [email, setEmail] = useState(business.email);
@@ -501,6 +530,66 @@ export default function BusinessSettingsPage() {
               )}
             </div>
           )}
+        </Card>
+
+        {/* Workplace Attendance Verification (Phase 8.5, spec §3) */}
+        <Card className="p-5 sm:p-6">
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold text-zinc-900">
+            <MapPin aria-hidden className="h-4 w-4 text-brand-600" />
+            Workplace Attendance Verification
+          </h2>
+          <p className="mt-1 max-w-md text-sm text-zinc-500">
+            Register where work happens. When an employee taps Start Work,
+            BizMate checks — once, only then — how far they are from here.
+            Location is never tracked continuously.
+          </p>
+          {workplace ? (
+            <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2.5 text-sm">
+              <p className="font-medium text-emerald-800">Workplace registered</p>
+              <p className="mt-0.5 text-xs text-emerald-700">
+                {workplace.lat.toFixed(5)}, {workplace.lng.toFixed(5)} · radius{" "}
+                {workplace.radiusMeters}m
+              </p>
+            </div>
+          ) : (
+            <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+              No workplace registered — attendance will record “Unable to
+              verify” until you capture it.
+            </div>
+          )}
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => void captureWorkplace()}
+              disabled={locBusy}
+            >
+              <MapPin aria-hidden className="h-4 w-4" />
+              {locBusy
+                ? "Getting location…"
+                : workplace
+                  ? "Re-capture location"
+                  : "Capture workplace location"}
+            </Button>
+            {workplace ? (
+              <label className="flex items-center gap-2 text-xs text-zinc-600">
+                Radius (m)
+                <input
+                  type="number"
+                  min={10}
+                  step={10}
+                  value={workplace.radiusMeters}
+                  onChange={(e) => {
+                    const r = Number.parseInt(e.target.value, 10);
+                    if (Number.isInteger(r) && r >= 10) {
+                      setWorkplace({ ...workplace, radiusMeters: r });
+                    }
+                  }}
+                  className="w-20 rounded-lg border border-zinc-300 bg-surface px-2 py-1 text-xs tabular-nums"
+                />
+              </label>
+            ) : null}
+          </div>
+          {locMsg ? <p className="mt-2 text-xs text-zinc-500">{locMsg}</p> : null}
         </Card>
 
         {/* Discounts */}

@@ -32,7 +32,12 @@ export type NotificationKind =
   | "outstanding_balance"
   | "stock_adjustment"
   | "approval_request"
-  | "report_ready";
+  | "report_ready"
+  // Phase 8.5 kinds (spec §12 + §13):
+  | "attendance"
+  | "new_inventory"
+  | "payment_partial"
+  | "followup";
 
 /** Clear priority labels — never numeric scores. */
 export type NotificationSeverity = "info" | "warning" | "critical";
@@ -80,6 +85,10 @@ const DEFAULT_SEVERITY: Record<NotificationKind, NotificationSeverity> = {
   stock_adjustment: "info",
   approval_request: "warning",
   report_ready: "info",
+  attendance: "warning",
+  new_inventory: "info",
+  payment_partial: "info",
+  followup: "info",
 };
 
 /** Fill fields added in Phase 8 for records persisted before it. */

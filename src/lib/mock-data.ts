@@ -79,10 +79,19 @@ export const seedProducts: Product[] = [
   },
 ];
 
-/** Extended catalog info shown in employee search and inventory (mock). */
+/**
+ * Extended catalog info shown in employee search and inventory (mock).
+ * Phase 8.5: the 1.5HP AC carries the manager's pricing — regular ₦650,000
+ * with a 5% discount = ₦32,500 off = ₦617,500 final (the spec §4 example).
+ */
 export const seedProductExtras: Record<
   string,
-  { code: string; category: string; brand: string }
+  {
+    code: string;
+    category: string;
+    brand: string;
+    pricing?: { regularPrice: number; discountPercent: number } | null;
+  }
 > = {
   "Hisense 1HP Inverter AC": {
     code: "AS12TG1",
@@ -93,6 +102,7 @@ export const seedProductExtras: Record<
     code: "AS18TG1",
     category: "Air Conditioners",
     brand: "Hisense",
+    pricing: { regularPrice: 650000, discountPercent: 5 },
   },
   'Samsung 55" TV': {
     code: "UA55TUE70",
@@ -119,6 +129,33 @@ export const seedProductExtras: Record<
     category: "Generators",
     brand: "Thermocool",
   },
+};
+
+/**
+ * Demo-mode employee roster (spec §2 example). Real employee accounts come
+ * with the backend; the picker below proves multi-employee attribution —
+ * every action records who did it.
+ */
+export const seedEmployees: {
+  name: string;
+  role: "cashier" | "sales" | "manager";
+}[] = [
+  { name: "Sarah", role: "manager" },
+  { name: "John", role: "sales" },
+  { name: "Michael", role: "sales" },
+  { name: "Peter", role: "cashier" },
+  { name: "Grace", role: "sales" },
+];
+
+/**
+ * Demo workplace location (spec §3 example coordinates, Victoria Island,
+ * Lagos) with the default 100 m verification radius. Only used when no
+ * owner-captured workplace exists (demo mode).
+ */
+export const seedWorkplace = {
+  lat: 6.4281,
+  lng: 3.4219,
+  radiusMeters: 100,
 };
 
 /* ------------------------------------------------------------------ */

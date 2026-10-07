@@ -18,7 +18,7 @@ import { StockStatusPill } from "./StockStatusPill";
 import { useProducts } from "@/lib/products-store";
 import { useBusiness } from "@/lib/business-store";
 import { useEmployeeSession } from "@/lib/employee-session";
-import { hasCapability } from "@/lib/domain/permissions";
+import { hasLegacyCapability as hasCapability } from "@/lib/domain/permissions";
 import {
   stockStatus,
   stockStatusLabel,

@@ -17,9 +17,17 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { useProducts } from "@/lib/products-store";
-import { productCode, productCategory, productBrand } from "@/lib/product-meta";
+import {
+  productCode,
+  productCategory,
+  productBrand,
+  productPricing,
+  finalUnitPrice,
+  discountPerUnit,
+} from "@/lib/product-meta";
 import { useCustomers } from "@/lib/customers-store";
-import { currentEmployeeName } from "@/lib/employee-session";
+import { currentEmployeeName, currentEmployeeId } from "@/lib/employee-session";
+import { useEmployeeSession } from "@/lib/employee-session";
 import { recordActivity } from "@/lib/activity-store";
 import { stockStatus } from "@/lib/domain/stock-state";
 import { processSaleCompleted } from "@/lib/domain/automation";
@@ -87,16 +95,39 @@ function ProductPicker() {
 
   const pickedProduct = products.find((p) => p.id === picked) ?? null;
 
+  // Manager pricing (spec §4): regular price + discount % → amount + final.
+  // The employee NEVER edits these — they are display-only.
+  const pickedPricing = pickedProduct ? productPricing(pickedProduct.name) : null;
+  const pickedRegular = pickedPricing?.regularPrice ?? pickedProduct?.price ?? 0;
+  const pickedDiscountPct = pickedPricing?.discountPercent ?? 0;
+  const pickedDiscountAmt =
+    pickedProduct && pickedDiscountPct > 0
+      ? discountPerUnit(pickedRegular, pickedDiscountPct)
+      : 0;
+  const pickedFinal = pickedProduct
+    ? finalUnitPrice(pickedRegular, pickedDiscountPct)
+    : 0;
+
   function tryAdd() {
     if (!pickedProduct) return;
+    // Freeze the PRICING SNAPSHOT at add time (spec §4): regular price,
+    // discount %, discount amount, final unit price. Later product changes
+    // can never rewrite this sale.
+    const pricing = {
+      regularPrice: pickedRegular,
+      discountPercent: pickedDiscountPct,
+      discountAmount: pickedDiscountAmt,
+      finalUnitPrice: pickedFinal,
+    };
     const result = addItemToSale(
       {
         id: pickedProduct.id,
         name: pickedProduct.name,
         code: productCode(pickedProduct.name),
         category: productCategory(pickedProduct.name),
-        price: pickedProduct.price,
+        price: pickedFinal,
         stock: pickedProduct.stock,
+        pricing,
       },
       qty,
     );
@@ -204,9 +235,25 @@ function ProductPicker() {
                       </span>
                     </span>
                     <span className="shrink-0 text-right">
-                      <span className="block text-sm font-medium tabular-nums text-zinc-900">
-                        {formatSaleMoney(p.price)}
-                      </span>
+                      {(() => {
+                        const pr = productPricing(p.name);
+                        const final = pr
+                          ? finalUnitPrice(pr.regularPrice, pr.discountPercent)
+                          : p.price;
+                        return (
+                          <>
+                            <span className="block text-sm font-medium tabular-nums text-zinc-900">
+                              {formatSaleMoney(final)}
+                            </span>
+                            {pr && pr.discountPercent > 0 ? (
+                              <span className="block text-[11px] tabular-nums text-zinc-400">
+                                <span className="line-through">{formatSaleMoney(pr.regularPrice)}</span>{" "}
+                                −{pr.discountPercent}%
+                              </span>
+                            ) : null}
+                          </>
+                        );
+                      })()}
                       <span
                         className={cn(
                           "block text-xs font-medium",
@@ -228,14 +275,34 @@ function ProductPicker() {
         </ul>
       )}
 
-      {/* Quantity selector for the picked product */}
+      {/* Quantity selector for the picked product — manager pricing shown,
+          never editable (spec §4 example layout). */}
       {pickedProduct ? (
         <div className="mt-3 rounded-xl border border-brand-200 bg-brand-50/50 p-3">
           <p className="text-sm font-semibold text-zinc-900">{pickedProduct.name}</p>
           <p className="text-xs text-zinc-500">
-            {productCode(pickedProduct.name)} · {formatSaleMoney(pickedProduct.price)} ·
-            Available: {pickedProduct.stock}
+            {productCode(pickedProduct.name)} · Available: {pickedProduct.stock}
           </p>
+          {pickedDiscountPct > 0 ? (
+            <div className="mt-1.5 rounded-lg bg-surface px-2.5 py-2 text-xs">
+              <div className="flex justify-between text-zinc-500">
+                <span>Regular Price</span>
+                <span className="line-through tabular-nums">{formatSaleMoney(pickedRegular)}</span>
+              </div>
+              <div className="mt-0.5 flex justify-between text-amber-700">
+                <span>Discount ({pickedDiscountPct}%)</span>
+                <span className="tabular-nums">−{formatSaleMoney(pickedDiscountAmt)}</span>
+              </div>
+              <div className="mt-0.5 flex justify-between font-semibold text-zinc-900">
+                <span>Final Price</span>
+                <span className="tabular-nums">{formatSaleMoney(pickedFinal)}</span>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-1.5 text-sm font-medium tabular-nums text-zinc-900">
+              {formatSaleMoney(pickedFinal)}
+            </p>
+          )}
           <div className="mt-2 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <button
@@ -570,9 +637,15 @@ function PaymentSection() {
 function CurrentSalePanel({ onComplete }: { onComplete: (sale: CompletedSale) => void }) {
   const draft = useSaleDraft();
   const { products, updateProduct } = useProducts();
+  const session = useEmployeeSession();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [discountOpen, setDiscountOpen] = useState(false);
+
+  // Attribution (spec §2): stamp WHO is selling onto the draft the first
+  // time it renders with items, so the engine records the right actor.
+  if (draft.items.length > 0 && (draft.actorId !== session.employeeId || draft.actorRole !== session.operationalRole)) {
+    updateSaleDraft({ actorId: session.employeeId, actorRole: session.operationalRole });
+  }
 
   /**
    * Repository adapter for the automation engine: persists one product's
@@ -601,7 +674,7 @@ function CurrentSalePanel({ onComplete }: { onComplete: (sale: CompletedSale) =>
     const result = await processSaleCompleted({
       draft,
       catalog: products,
-      actor: currentEmployeeName(),
+      actor: { name: currentEmployeeName(), userId: currentEmployeeId(), operationalRole: session.operationalRole },
       applyStockChange: applyDeductedStock,
     });
     setBusy(false);
@@ -614,6 +687,7 @@ function CurrentSalePanel({ onComplete }: { onComplete: (sale: CompletedSale) =>
 
   const subtotal = saleSubtotal(draft);
   const discount = saleDiscountAmount(draft);
+  void discount;
   const total = saleTotal(draft);
 
   return (
@@ -690,61 +764,9 @@ function CurrentSalePanel({ onComplete }: { onComplete: (sale: CompletedSale) =>
         </ul>
       )}
 
-      {/* Discount (existing BizMate concept, kept small) */}
-      {draft.items.length > 0 ? (
-        <div className="mt-2">
-          {draft.discountPercent ? (
-            <div className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 text-sm">
-              <span className="font-medium text-amber-700">Discount {draft.discountPercent}%</span>
-              <span className="flex items-center gap-2 tabular-nums text-amber-700">
-                −{formatSaleMoney(discount)}
-                <button
-                  type="button"
-                  aria-label="Remove discount"
-                  onClick={() => updateSaleDraft({ discountPercent: null })}
-                  className="rounded p-0.5 hover:bg-amber-100"
-                >
-                  <X aria-hidden className="h-3.5 w-3.5" />
-                </button>
-              </span>
-            </div>
-          ) : discountOpen ? (
-            <div className="rounded-lg border border-zinc-200 p-2.5">
-              <label htmlFor="sale-discount" className="text-xs font-medium text-zinc-600">
-                Discount %
-              </label>
-              <input
-                id="sale-discount"
-                type="number"
-                min={0}
-                max={100}
-                value={draft.discountPercent ?? ""}
-                onChange={(e) => {
-                  const v = Math.min(100, Math.max(0, Number.parseFloat(e.target.value) || 0));
-                  updateSaleDraft({ discountPercent: v || null });
-                }}
-                placeholder="e.g. 5"
-                className="mt-1 w-full rounded-lg border border-zinc-300 bg-surface px-3 py-2 text-sm tabular-nums focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-              />
-              <button
-                type="button"
-                onClick={() => setDiscountOpen(false)}
-                className="mt-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-700"
-              >
-                Done
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setDiscountOpen(true)}
-              className="text-xs font-medium text-brand-600 hover:text-brand-700"
-            >
-              + Add discount
-            </button>
-          )}
-        </div>
-      ) : null}
+      {/* Discounts are MANAGER-controlled (Phase 8.5, spec §4): they live on
+          the product (regular price + %), not on the sale. Employees see the
+          computed final price and simply sell — nothing to type here. */}
 
       {/* Totals */}
       {draft.items.length > 0 ? (

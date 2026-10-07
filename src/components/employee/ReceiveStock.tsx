@@ -58,7 +58,7 @@ export function ReceiveStock() {
     const result = await processStockReceived({
       product: picked,
       quantity: qty,
-      actor: currentEmployeeName(),
+      actor: { name: currentEmployeeName(), operationalRole: "employee" },
       applyStockChange: async (productId, newStock) => {
         await updateProduct(productId, {
           name: picked.name,

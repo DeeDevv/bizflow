@@ -50,6 +50,17 @@ function SectionTitle({ children }: { children: string }) {
 }
 
 function ReportHeader({ report }: { report: EndOfDayReport }) {
+  const { summary, inventorySummary } = report;
+  // Concise owner summary on top (Phase 8.5, spec §14): the seven numbers
+  // that matter, before the full document below.
+  const snapshot = [
+    `Sales ${money(summary.salesValue)}`,
+    `Transactions ${summary.transactionCount}`,
+    `Received ${money(summary.moneyReceived)}`,
+    `Outstanding ${money(summary.outstanding)}`,
+    `Products sold ${report.productRows.reduce((s, r) => s + r.quantity, 0)}`,
+    `Low stock ${inventorySummary.lowCount}`,
+  ];
   return (
     <header className="px-6 pb-5 pt-6 text-center">
       <p className="text-sm font-semibold uppercase tracking-widest text-zinc-900">
@@ -59,6 +70,13 @@ function ReportHeader({ report }: { report: EndOfDayReport }) {
         End-of-Day Business Report
       </h1>
       <p className="mt-1 text-sm text-zinc-500">{report.date.label}</p>
+      <p className="mx-auto mt-3 flex max-w-md flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-zinc-600">
+        {snapshot.map((line) => (
+          <span key={line} className="whitespace-nowrap">
+            {line}
+          </span>
+        ))}
+      </p>
     </header>
   );
 }

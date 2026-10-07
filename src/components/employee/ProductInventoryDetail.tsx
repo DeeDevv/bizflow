@@ -18,7 +18,7 @@ import { useProducts } from "@/lib/products-store";
 import { useSetup } from "@/lib/setup-store";
 import { useBusiness } from "@/lib/business-store";
 import { useEmployeeSession, currentEmployeeName } from "@/lib/employee-session";
-import { hasCapability } from "@/lib/domain/permissions";
+import { hasLegacyCapability as hasCapability } from "@/lib/domain/permissions";
 import {
   stockStatus,
   stockStatusLabel,
@@ -347,7 +347,7 @@ function AdjustStockDialog({
       delta,
       reason,
       note: note.trim() || undefined,
-      actor: currentEmployeeName(),
+      actor: { name: currentEmployeeName(), operationalRole: "employee" },
       // Repository adapter: the engine decides the new stock; this persists it.
       applyStockChange: async (productId, newStock) => {
         const p = products.find((x) => x.id === productId);

@@ -57,6 +57,21 @@ export interface WarrantyInfo {
   notes: string;
 }
 
+/**
+ * Manager-controlled product pricing (Phase 8.5, spec §4).
+ *
+ * The manager sets the Regular Price and an optional Discount %; BizMate
+ * derives the Discount Amount and the Final Price. The final price is what
+ * employees sell at — they can change neither the discount nor the price.
+ * Stored per product name like the other setup extras.
+ */
+export interface ProductPricing {
+  /** List price before any discount. */
+  regularPrice: number;
+  /** Discount percentage 0–100; 0/absent = no discount. */
+  discountPercent: number;
+}
+
 /** A product as entered during setup — everything BizMate needs up front. */
 export interface SetupProduct {
   id: string;
@@ -73,6 +88,8 @@ export interface SetupProduct {
   openingStock: number;
   /** Alert when stock falls to this level; 0 = no alert. */
   lowStockAt: number;
+  /** Manager pricing: regular price + discount % (final price is derived). */
+  pricing: ProductPricing | null;
   warranty: WarrantyInfo;
   /** Category-specific details (capacity, power rating, …) — free-form for now. */
   details: Record<string, string>;
@@ -94,6 +111,23 @@ export interface BusinessDraft {
   currency: string;
 }
 
+/**
+ * The workplace address as a coordinates pair (Phase 8.5, spec §3).
+ * Captured once by the owner/manager from Settings; used by Workplace
+ * Attendance Verification to compute how far an employee is from work at
+ * Start/End Work. null = not set → attendance cannot verify yet.
+ */
+export interface WorkplaceLocation {
+  /** Latitude, decimal degrees. */
+  lat: number;
+  /** Longitude, decimal degrees. */
+  lng: number;
+  /** Verification radius in metres (configurable; default 100). */
+  radiusMeters: number;
+  /** When the location was captured (ISO). */
+  capturedAt: string;
+}
+
 export const emptyBusinessDraft: BusinessDraft = {
   name: "",
   email: "",
@@ -110,6 +144,8 @@ export interface SetupState {
   products: SetupProduct[];
   /** Extended fields keyed by product name (survives the local→database id swap). */
   productExtras: Record<string, ProductExtra>;
+  /** Where work happens — Start/End Work verifies distance against this. */
+  workplace: WorkplaceLocation | null;
   setupComplete: boolean;
 }
 
@@ -120,10 +156,46 @@ const seed: SetupState = {
   employees: [],
   products: [],
   productExtras: {},
+  workplace: null,
   setupComplete: false,
 };
 
 const store = createPersistentStore<SetupState>(STORAGE_KEY, seed);
+
+/**
+ * Merge whatever is persisted with the seed so a missing or legacy record
+ * (pre-8.5 data has no `workplace`; a partially written record may lack
+ * `employees`) can never crash a component — every field keeps a default.
+ */
+function normalizeSetup(raw: unknown): SetupState {
+  if (typeof raw !== "object" || raw === null) return { ...seed };
+  const r = raw as Partial<SetupState>;
+  const workplace = r.workplace;
+  return {
+    businessType: typeof r.businessType === "string" ? r.businessType : seed.businessType,
+    businessDraft: { ...seed.businessDraft, ...(r.businessDraft ?? {}) },
+    owner: { ...seed.owner, ...(r.owner ?? {}) },
+    employees: Array.isArray(r.employees) ? r.employees : [],
+    products: Array.isArray(r.products) ? r.products : [],
+    productExtras:
+      r.productExtras && typeof r.productExtras === "object" ? r.productExtras : {},
+    workplace:
+      workplace && typeof workplace === "object" &&
+      typeof workplace.lat === "number" && typeof workplace.lng === "number"
+        ? workplace
+        : null,
+    setupComplete: r.setupComplete === true,
+  };
+}
+
+// Self-heal at load: if the persisted record predates a field or was written
+// in a foreign shape, rewrite it in the canonical form once.
+if (typeof window !== "undefined") {
+  const healed = normalizeSetup(store.get());
+  if (JSON.stringify(healed) !== JSON.stringify(store.get())) {
+    store.set(healed);
+  }
+}
 
 function getSnapshot(): SetupState {
   return store.get();
@@ -144,6 +216,8 @@ interface SetupStore {
   addProduct: (product: Omit<SetupProduct, "id">) => void;
   updateProduct: (id: string, input: Omit<SetupProduct, "id">) => void;
   removeProduct: (id: string) => void;
+  /** Save the workplace coordinates + radius (Settings). */
+  setWorkplace: (location: WorkplaceLocation | null) => void;
   /** Freeze product extras and mark setup complete. */
   completeSetup: () => void;
 }
@@ -218,6 +292,10 @@ export function SetupProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const setWorkplace = useCallback((location: WorkplaceLocation | null) => {
+    store.set({ ...store.get(), workplace: location });
+  }, []);
+
   const completeSetup = useCallback(() => {
     const current = store.get();
     // Freeze the extended fields so they survive the products moving into
@@ -230,6 +308,7 @@ export function SetupProvider({ children }: { children: React.ReactNode }) {
         brand: p.brand,
         costPrice: p.costPrice,
         lowStockAt: p.lowStockAt,
+        pricing: p.pricing,
         warranty: p.warranty,
         details: p.details,
       };
@@ -249,6 +328,7 @@ export function SetupProvider({ children }: { children: React.ReactNode }) {
       addProduct,
       updateProduct,
       removeProduct,
+      setWorkplace,
       completeSetup,
     }),
     [
@@ -262,6 +342,7 @@ export function SetupProvider({ children }: { children: React.ReactNode }) {
       addProduct,
       updateProduct,
       removeProduct,
+      setWorkplace,
       completeSetup,
     ],
   );

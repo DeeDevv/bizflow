@@ -8,6 +8,7 @@ export type InvoiceStatus = "paid" | "pending" | "overdue" | "draft";
 /** The five sections a small-business owner needs. */
 export type NavIcon =
   | "home"
+  | "operations"
   | "customers"
   | "invoices"
   | "sales"
@@ -147,7 +148,12 @@ export interface BusinessInfo {
 export interface Product {
   id: string;
   name: string;
-  /** Selling price per unit, in the business currency. */
+  /**
+   * Final selling price per unit after the manager's product discount
+   * (Phase 8.5). What the employee sees, and the only price a sale uses.
+   * When a discount is configured this equals regular × (1 − %);
+   * otherwise it is simply the regular price.
+   */
   price: number;
   /** Units on hand; for services a large number or 0 = unlimited. */
   stock: number;

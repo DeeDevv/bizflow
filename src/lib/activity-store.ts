@@ -17,7 +17,8 @@ export type ActivityKind =
   | "sale_completed"
   | "customer_added"
   | "stock_received"
-  | "stock_adjusted";
+  | "stock_adjusted"
+  | "payment_recorded";
 
 export interface ActivityEntry {
   id: string;

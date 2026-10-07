@@ -5,6 +5,8 @@ import { useEmployeeTransactions } from "../employee-transactions";
 import type { CompletedSale } from "../employee-sales";
 import { useProducts } from "../products-store";
 import { useStockMovements, type StockMovement } from "./stock-movements";
+import { useAttendance } from "./attendance";
+import { useFollowUps } from "./follow-ups";
 import {
   buildEndOfDayReport,
   isSameLocalDay,
@@ -14,6 +16,11 @@ import { useAttentionItems } from "../attention";
 import { activeNotifications, raiseNotification } from "./notifications";
 import { formatMoneyWhole } from "../currency-symbol";
 import { getBusinessInfo } from "../business-store";
+import {
+  productBrand,
+  productCategory,
+} from "../product-meta";
+import { stockStatus } from "./stock-state";
 import type { Product } from "../types";
 
 /**
@@ -54,6 +61,38 @@ export interface DailyUpdate {
   yesterdayReceived: number;
   /** Completed transactions yesterday. */
   yesterdayTransactions: number;
+  /** Yesterday's sales value (for the compact ₦2.45M-style summary). */
+  yesterdaySales: number;
+  /** Yesterday's outstanding (sales value − received). */
+  yesterdayOutstanding: number;
+  /** Staff with activity yesterday/today (Workplace Attendance). */
+  staffScheduled: number;
+  /** Open (unresolved) orders — transactions with a balance. */
+  pendingOrders: number;
+  /** Open customer follow-ups (due + overdue). */
+  pendingFollowUps: number;
+  /** Grouped stock overview (spec §11) — business-type aware, capped. */
+  stockGroups: StockGroup[];
+  /** Low-stock / out-of-stock counts for the exceptions line. */
+  lowCount: number;
+  outCount: number;
+}
+
+/**
+ * One grouped stock line (spec §11): electronics groups Brand → Variant,
+ * other businesses group by category → item. Derived from the SAME product
+ * metadata the whole app uses — no electronics hard-coding: whatever brand
+ * /variant data exists is used; anything without falls into a clean
+ * category → product list. Groups are capped so the notification stays a
+ * concise overview, never an inventory dump.
+ */
+export interface StockGroup {
+  /** Group heading, e.g. "Hisense" or "Air Conditioners". */
+  label: string;
+  /** Sub-lines, e.g. "1.5HP Inverter AC — 7" or "Hisense 1HP AC — 10". */
+  items: { label: string; qty: number }[];
+  /** Total units in this group. */
+  totalUnits: number;
 }
 
 /** "Saturday, September 26" (no year — the update is always about now). */
@@ -63,6 +102,60 @@ function shortDayLabel(date: Date): string {
     month: "long",
     day: "numeric",
   });
+}
+
+/* ---------------- Stock grouping (spec §11) ---------------- */
+
+/** Maximum groups + items per group rendered in the notification. */
+const MAX_GROUPS = 4;
+const MAX_ITEMS_PER_GROUP = 4;
+
+/**
+ * Extract a variant/capacity fragment from a product name by stripping the
+ * brand and the generic category words — "Hisense 1.5HP Inverter AC" with
+ * brand "Hisense" → "1.5HP Inverter AC". Business-type agnostic: the
+ * leftover words ARE the variant (size, colour, capacity, model…).
+ */
+function variantOf(name: string, brand: string): string {
+  let rest = name;
+  if (brand && rest.toLowerCase().startsWith(brand.toLowerCase())) {
+    rest = rest.slice(brand.length).trim();
+  }
+  return rest || name;
+}
+
+/**
+ * Group the catalog the way the owner thinks about stock (spec §11).
+ * When brands exist (electronics, fashion): Brand → Variant → Qty.
+ * When they don't (restaurant, salon): Category → Item → Qty.
+ * Capped to keep the morning update concise.
+ */
+export function groupStockForUpdate(products: Product[]): StockGroup[] {
+  const brandless = products.every((p) => !productBrand(p.name));
+  const groups = new Map<string, Map<string, number>>();
+
+  for (const p of products) {
+    const brand = productBrand(p.name);
+    const category = productCategory(p.name);
+    const groupLabel = brandless ? category || "Other" : brand || category || "Other";
+    const itemLabel = brandless
+      ? p.name
+      : variantOf(p.name, brand || "");
+    const inner = groups.get(groupLabel) ?? new Map<string, number>();
+    inner.set(itemLabel, (inner.get(itemLabel) ?? 0) + p.stock);
+    groups.set(groupLabel, inner);
+  }
+
+  return [...groups.entries()]
+    .map(([label, items]) => ({
+      label,
+      items: [...items.entries()]
+        .slice(0, MAX_ITEMS_PER_GROUP)
+        .map(([itemLabel, qty]) => ({ label: itemLabel, qty })),
+      totalUnits: [...items.values()].reduce((s, q) => s + q, 0),
+    }))
+    .sort((a, b) => b.totalUnits - a.totalUnits)
+    .slice(0, MAX_GROUPS);
 }
 
 /**
@@ -78,6 +171,8 @@ export function buildDailyUpdate(input: {
   products: Product[];
   movements: StockMovement[];
   attention: { severity?: "critical" | "important"; title: string; href: string }[];
+  attendanceToday?: { employeeName: string; status: string }[];
+  followUps?: { dueAt: string; completedAt: string | null }[];
 }): DailyUpdate {
   const { today, businessName, currency, transactions, products, movements, attention } =
     input;
@@ -119,6 +214,23 @@ export function buildDailyUpdate(input: {
     });
   }
 
+  // Stock exceptions from the ONE shared stock-state source.
+  let lowCount = 0;
+  let outCount = 0;
+  for (const p of products) {
+    const status = stockStatus(p);
+    if (status === "low") lowCount += 1;
+    else if (status === "out") outCount += 1;
+  }
+
+  // Pending: open orders (balance > 0) + open follow-ups.
+  const pendingOrders = transactions.filter((s) => s.balance > 0).length;
+  const followUps = input.followUps ?? [];
+  const pendingFollowUps = followUps.filter((f) => !f.completedAt).length;
+
+  // Staff seen in attendance records today (spec §11 "Staff scheduled").
+  const staffNames = new Set((input.attendanceToday ?? []).map((a) => a.employeeName));
+
   return {
     dateLabel: shortDayLabel(today),
     attentionCount: attention.length,
@@ -127,8 +239,21 @@ export function buildDailyUpdate(input: {
     hasYesterday: yReport.summary.hasSales,
     yesterdayReceived: yReport.summary.moneyReceived,
     yesterdayTransactions: yReport.summary.transactionCount,
+    yesterdaySales: yReport.summary.salesValue,
+    yesterdayOutstanding: Math.max(
+      0,
+      yReport.summary.salesValue - yReport.summary.moneyReceived,
+    ),
+    staffScheduled: staffNames.size,
+    pendingOrders,
+    pendingFollowUps,
+    stockGroups: groupStockForUpdate(products),
+    lowCount,
+    outCount,
   };
 }
+
+
 
 /* ---------------- Local-day clock (hydration-safe) ---------------- */
 
@@ -164,10 +289,16 @@ export function useDailyBusinessUpdate(): DailyUpdate | null {
   const { products } = useProducts();
   const movements = useStockMovements();
   const attention = useAttentionItems();
+  const attendance = useAttendance();
+  const followUps = useFollowUps();
 
   return useMemo(() => {
     if (!today) return null;
     const info = getBusinessInfo();
+    // Today's attendance attempts, summarized (spec §11 "Staff").
+    const attendanceToday = attendance
+      .filter((r) => isSameLocalDay(r.at, today))
+      .map((r) => ({ employeeName: r.employeeName, status: r.status }));
     return buildDailyUpdate({
       today,
       businessName: info.name || "Your business",
@@ -176,8 +307,10 @@ export function useDailyBusinessUpdate(): DailyUpdate | null {
       products,
       movements,
       attention,
+      attendanceToday,
+      followUps: followUps.map((f) => ({ dueAt: f.dueAt, completedAt: f.completedAt })),
     });
-  }, [today, transactions, products, movements, attention]);
+  }, [today, transactions, products, movements, attention, attendance, followUps]);
 }
 
 /**

@@ -23,7 +23,23 @@ export interface SaleItem {
   /** Denormalized from the catalog — never re-typed by the employee. */
   code: string;
   category: string;
+  /** Final unit price actually charged (catalog price — employees cannot edit it). */
   unitPrice: number;
+  /**
+   * PRICING SNAPSHOT (Phase 8.5, spec §4): frozen at add-to-sale time so a
+   * later product/discount change can NEVER rewrite history. The catalog
+   * price lives on; the transaction keeps what the customer actually paid.
+   */
+  pricing: {
+    /** List price before discount, at sale time. */
+    regularPrice: number;
+    /** Discount % the manager had configured, at sale time. */
+    discountPercent: number;
+    /** regular − final, per unit, at sale time. */
+    discountAmount: number;
+    /** What one unit actually sold for. */
+    finalUnitPrice: number;
+  };
   quantity: number;
   /** Stock at the time the item was added, for availability messages. */
   availableStock: number;
@@ -43,6 +59,13 @@ export interface SaleDraft {
   /** Optional whole-sale discount (percent) — existing BizMate concept. */
   discountPercent: number | null;
   startedAt: string | null;
+  /**
+   * Stable id of the employee/actor building this draft (spec §2). null =
+   * the owner previewing. Attribution lands on the CompletedSale record.
+   */
+  actorId: string | null;
+  /** Operational role at draft time — "employee" | "manager" | "owner". */
+  actorRole: "owner" | "manager" | "employee";
 }
 
 export function emptySaleDraft(): SaleDraft {
@@ -56,6 +79,8 @@ export function emptySaleDraft(): SaleDraft {
     amountPaid: 0,
     discountPercent: null,
     startedAt: null,
+    actorId: null,
+    actorRole: "owner",
   };
 }
 
@@ -117,14 +142,25 @@ export function saleBalance(draft: SaleDraft): number {
 }
 
 /** Add a catalog product to the sale (quantity clamped to available stock). */
-export function addItemToSale(product: {
-  id: string;
-  name: string;
-  code: string;
-  category: string;
-  price: number;
-  stock: number;
-}, quantity = 1): { ok: boolean; message?: string } {
+/**
+ * Add a catalog product to the sale (quantity clamped to available stock).
+ * Phase 8.5: the product is passed with its PRICING SNAPSHOT (regular
+ * price, discount %, discount amount, final unit price) frozen here — the
+ * transaction later stores this verbatim (spec §4, history protection).
+ */
+export function addItemToSale(
+  product: {
+    id: string;
+    name: string;
+    code: string;
+    category: string;
+    price: number;
+    stock: number;
+    /** Frozen manager pricing at add time (final price = charged price). */
+    pricing: SaleItem["pricing"];
+  },
+  quantity = 1,
+): { ok: boolean; message?: string } {
   if (product.stock <= 0) {
     return { ok: false, message: "This product is out of stock." };
   }
@@ -150,7 +186,8 @@ export function addItemToSale(product: {
           name: product.name,
           code: product.code,
           category: product.category,
-          unitPrice: product.price,
+          unitPrice: product.pricing.finalUnitPrice,
+          pricing: product.pricing,
           quantity,
           availableStock: product.stock,
         },
@@ -201,6 +238,13 @@ export interface CompletedSale {
   balance: number;
   /** Employee display name (mock session for now). */
   employeeName: string;
+  /**
+   * Attribution (Phase 8.5, spec §2): stable actor id + operational role
+   * + business id, so every transaction is individually attributable.
+   */
+  employeeId: string;
+  employeeRole: "owner" | "manager" | "employee";
+  businessId: string | null;
   /** ISO timestamps. */
   completedAt: string;
 }
@@ -247,6 +291,9 @@ export function completeSaleDraft(actor: string): CompletedSaleEvent {
     amountPaid: draft.paymentStatus === "paid" ? saleTotal(draft) : draft.amountPaid,
     balance: saleBalance(draft),
     employeeName: actor || "Staff",
+    employeeId: draft.actorId || "role-preview",
+    employeeRole: draft.actorRole,
+    businessId: getBusinessInfo().id ?? null,
     completedAt: new Date().toISOString(),
   };
 

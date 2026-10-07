@@ -71,11 +71,12 @@ export const ROLE_TASKS: Record<EmployeeRole, RoleTask[]> = {
     { label: "My Activity", description: "Everything you did today", href: "/dashboard/employee/activity" },
   ],
   manager: [
+    { label: "Operations Center", description: "Orders, stock, team and follow-ups", href: "/dashboard/operations" },
     { label: "Sales", description: "How the business is selling", href: "/dashboard/sales" },
     { label: "Inventory", description: "Quantities and stock levels", href: "/dashboard/employee/inventory" },
-    { label: "Staff", description: "Who's working today" },
+    { label: "Add / Edit Products", description: "Catalog, prices and discounts", href: "/dashboard/products" },
     { label: "Customers", description: "Look up customer details", href: "/dashboard/customers" },
-    { label: "Reports", description: "Business performance summaries" },
+    { label: "Reports", description: "End-of-day business report", href: "/dashboard/report" },
   ],
   service: [
     { label: "Today's Jobs", description: "Repairs and service visits for today" },

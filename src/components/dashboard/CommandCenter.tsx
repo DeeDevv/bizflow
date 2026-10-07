@@ -27,7 +27,7 @@ import {
   formatActivityTime,
   type ActivityEntry,
 } from "@/lib/activity-store";
-import { formatMoneyWhole } from "@/lib/currency-symbol";
+import { formatMoneyWhole, formatMoneyCompact } from "@/lib/currency-symbol";
 import {
   useTodayKpis,
   useInventorySnapshot,
@@ -128,9 +128,10 @@ function UpdateLine({ line }: { line: DailyUpdateLine }) {
 }
 
 /**
- * The owner's short morning summary (Phase 8): attention, outstanding,
- * yesterday's received. Every figure comes from the shared domain
- * calculations (see daily-update.ts) — this card only renders.
+ * The owner's short morning summary (Phase 8, refined Phase 8.5 spec §11):
+ * Stock Overview + Exceptions — grouped by the business's own attributes,
+ * pending orders/follow-ups, staff, and yesterday in compact money. NOT a
+ * full inventory dump; "View details" links to the full report.
  */
 function DailyBusinessUpdate() {
   const update = useDailyBusinessUpdate();
@@ -145,6 +146,8 @@ function DailyBusinessUpdate() {
     );
   }
 
+  const compact = (v: number) => formatMoneyCompact(v, getBusinessInfo().currency || "NGN");
+
   return (
     <Card>
       <CardHeader
@@ -155,43 +158,94 @@ function DailyBusinessUpdate() {
             href="/dashboard/report"
             className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
           >
-            View full report
+            View details
             <ArrowRight aria-hidden className="h-3.5 w-3.5" />
           </Link>
         }
       />
       <div className="border-t border-zinc-100">
-        <dl className="grid grid-cols-3 divide-x divide-zinc-100">
+        {/* Stock Overview + Exceptions (spec §11) */}
+        {update.stockGroups.length > 0 ? (
+          <div className="px-5 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              Stock Overview
+            </p>
+            <div className="mt-2 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+              {update.stockGroups.map((g) => (
+                <div key={g.label} className="min-w-0">
+                  <p className="text-sm font-medium text-zinc-900">{g.label}</p>
+                  <ul className="mt-0.5">
+                    {g.items.map((it) => (
+                      <li key={it.label} className="flex justify-between gap-3 text-xs">
+                        <span className="min-w-0 truncate text-zinc-500">{it.label}</span>
+                        <span className="shrink-0 tabular-nums text-zinc-700">{it.qty}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium">
+              {update.lowCount > 0 ? (
+                <span className="text-amber-700">
+                  ⚠ Low Stock: {update.lowCount} {update.lowCount === 1 ? "product" : "products"}
+                </span>
+              ) : null}
+              {update.outCount > 0 ? (
+                <span className="text-red-700">
+                  🔴 Out of Stock: {update.outCount} {update.outCount === 1 ? "product" : "products"}
+                </span>
+              ) : null}
+              {update.lowCount === 0 && update.outCount === 0 ? (
+                <span className="text-emerald-700">All stock levels healthy</span>
+              ) : null}
+            </p>
+          </div>
+        ) : (
+          <p className="border-t border-zinc-100 px-5 py-3 text-sm text-zinc-500">
+            No products yet — your stock overview appears after setup.
+          </p>
+        )}
+
+        {/* People + pending (compact line) */}
+        <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-zinc-100 px-5 py-2.5 text-xs text-zinc-500">
+          <span>
+            <Users aria-hidden className="mr-1 inline h-3.5 w-3.5 text-zinc-400" />
+            Staff: {update.staffScheduled} verified today
+          </span>
+          <span>
+            <ReceiptText aria-hidden className="mr-1 inline h-3.5 w-3.5 text-zinc-400" />
+            Pending: {update.pendingOrders} orders, {update.pendingFollowUps} follow-ups
+          </span>
+        </div>
+
+        {/* Yesterday — compact money (spec §11: ₦2.45M / ₦350K) */}
+        <dl className="grid grid-cols-3 divide-x divide-zinc-100 border-t border-zinc-100">
           <div className="px-4 py-3">
-            <dt className="text-xs text-zinc-500">Needs attention</dt>
-            <dd
-              className={`mt-0.5 text-lg font-semibold tabular-nums ${
-                update.attentionCount > 0 ? "text-amber-700" : "text-zinc-900"
-              }`}
-            >
-              {update.attentionCount}
+            <dt className="text-xs text-zinc-500">Yesterday</dt>
+            <dd className="mt-0.5 text-lg font-semibold tabular-nums text-zinc-900">
+              {update.hasYesterday ? compact(update.yesterdaySales) : "—"}
             </dd>
+            <dd className="text-[11px] text-zinc-400">sales</dd>
           </div>
           <div className="px-4 py-3">
-            <dt className="text-xs text-zinc-500">Outstanding today</dt>
+            <dt className="text-xs text-zinc-500">Transactions</dt>
             <dd className="mt-0.5 text-lg font-semibold tabular-nums text-zinc-900">
-              {money(update.outstandingToday)}
-            </dd>
-          </div>
-          <div className="px-4 py-3">
-            <dt className="text-xs text-zinc-500">Received yesterday</dt>
-            <dd className="mt-0.5 text-lg font-semibold tabular-nums text-zinc-900">
-              {update.hasYesterday ? money(update.yesterdayReceived) : "—"}
+              {update.hasYesterday ? update.yesterdayTransactions : "—"}
             </dd>
             <dd className="text-[11px] text-zinc-400">
-              {update.hasYesterday
-                ? `${update.yesterdayTransactions} ${
-                    update.yesterdayTransactions === 1 ? "transaction" : "transactions"
-                  }`
-                : "No sales yesterday"}
+              {update.hasYesterday ? "yesterday" : "no sales yesterday"}
             </dd>
           </div>
+          <div className="px-4 py-3">
+            <dt className="text-xs text-zinc-500">Outstanding</dt>
+            <dd className="mt-0.5 text-lg font-semibold tabular-nums text-zinc-900">
+              {update.hasYesterday ? compact(update.yesterdayOutstanding) : "—"}
+            </dd>
+            <dd className="text-[11px] text-zinc-400">after yesterday</dd>
+          </div>
         </dl>
+
         {update.attention.length > 0 ? (
           <ul className="border-t border-zinc-100">
             {update.attention.map((l) => (
@@ -328,6 +382,7 @@ const KIND_LABEL: Record<AttentionItem["kind"], string> = {
   balance: "Payment",
   invoice: "Invoice",
   stock: "Stock",
+  attendance: "Attendance",
 };
 
 /** Critical business conditions (out of stock) rank above important alerts. */
@@ -344,6 +399,8 @@ function AttentionIcon({ item }: { item: AttentionItem }) {
   const cls = "mt-0.5 h-4 w-4 shrink-0";
   if (item.kind === "balance")
     return <BanknoteArrowUp aria-hidden className={`${cls} text-amber-500`} />;
+  if (item.kind === "attendance")
+    return <Users aria-hidden className={`${cls} text-amber-500`} />;
   if (item.kind === "invoice")
     return <ReceiptText aria-hidden className={`${cls} text-amber-500`} />;
   return (

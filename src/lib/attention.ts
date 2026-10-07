@@ -28,7 +28,7 @@ import { stockStatus } from "@/lib/domain/stock-state";
 
 export type AttentionItem = {
   id: string;
-  kind: "invoice" | "stock" | "balance";
+  kind: "invoice" | "stock" | "balance" | "attendance";
   /** Clear priority label, not a numeric score: out-of-stock is critical. */
   severity?: "critical" | "important";
   title: string;
@@ -47,11 +47,23 @@ export function useAttentionItems(): AttentionItem[] {
     // 1) Engine-raised condition notifications (deduped, resolved state-aware).
     //    Severity was decided once, by the engine, when the condition was raised.
     for (const n of engineNotes) {
-      if (n.kind === "report_ready") continue; // informational, not a condition
+      // Informational notices (report ready, inventory arrivals, follow-up
+      // nudges) belong to the bell and their own boards — not conditions.
+      if (
+        n.kind === "report_ready" ||
+        n.kind === "new_inventory" ||
+        n.kind === "followup"
+      )
+        continue;
       const subject = products.find((p) => p.id === n.subjectId);
       notes.push({
         id: n.id,
-        kind: n.kind === "outstanding_balance" ? "balance" : "stock",
+        kind:
+          n.kind === "outstanding_balance" || n.kind === "payment_partial"
+            ? "balance"
+            : n.kind === "attendance"
+              ? "attendance"
+              : "stock",
         // A stock condition record whose product is NOW out is critical even
         // if the stored notice was raised as low-stock warning.
         severity:

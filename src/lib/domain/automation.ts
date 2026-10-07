@@ -11,26 +11,56 @@ import {
   type CompletedSale,
   type SaleDraft,
 } from "../employee-sales";
-import { recordCompletedSale } from "../employee-transactions";
+import { recordCompletedSale, updateCompletedSale } from "../employee-transactions";
 import { recordActivity } from "../activity-store";
-import { currentEmployeeName } from "../employee-session";
+import { currentEmployeeId, currentEmployeeName } from "../employee-session";
+import { getBusinessInfo } from "../business-store";
 import type { Product } from "../types";
 import { evaluateStockCondition } from "./stock-state";
-import { raiseNotification } from "./notifications";
+import { raiseNotification, resolveNotification } from "./notifications";
 import { recordPurchase } from "./customer-history";
-import { applySaleToMetrics } from "./metrics";
+import { applySaleToMetrics, applyPaymentToMetrics } from "./metrics";
 import { buildReceiptData, type ReceiptData } from "./receipt";
 import { recordStockMovement } from "./stock-movements";
+import { requireCapability, type Actor } from "./permissions";
+import { PermissionError } from "./permissions";
+import {
+  scheduleFollowUpsForSale,
+  scheduleFollowUpForPendingOrder,
+  completePendingOrderFollowUp,
+} from "./follow-ups";
+import {
+  recordPaymentEvent,
+  laterPaymentsTotal,
+  paymentsForSale,
+  PAYMENT_METHOD_LABEL,
+  type PaymentMethod,
+} from "./payment-events";
 
 /**
- * The BizMate automation engine (Phase 4).
+ * The BizMate automation engine (Phase 4, hardened in Phase 8.5).
  *
  * ONE processing path per business event — UI components never scatter the
- * consequences. Pipeline (spec §4):
+ * consequences. Pipeline (spec §5):
  *
- *   Action → Event → Validate → Transaction → Inventory → Payment →
- *   Customer history → Receipt data → Activity → Metrics →
- *   Threshold checks → Notifications
+ *   Action → Event → Validate → [Permission gate] → Transaction → Inventory
+ *   → Payment → Customer history → Follow-ups → Receipt data → Activity →
+ *   Metrics → Threshold checks → Notifications → Reports
+ *
+ * Phase 8.5 hardening:
+ *  - Role permissions are enforced HERE, not just in the UI (spec §16):
+ *    requireCapability throws before any mutation on a disallowed action.
+ *  - Transactions snapshot per-item pricing (regular price, discount %,
+ *    discount amount, final unit price) — later product edits never
+ *    rewrite history (spec §4).
+ *  - Payments are EVENTS (spec §6): partial payment at sale time is
+ *    recorded as one event; later payments append more events. A sale's
+ *    paid/balance are always derived from total received, so history is
+ *    never overwritten.
+ *  - Follow-ups are scheduled by rule after each sale / pending order
+ *    (spec §10); settling a balance completes the collection follow-up.
+ *  - Stock received is aggregated into ONE "New Inventory Added"
+ *    notification per actor+hour — not per item (spec §12).
  *
  * Safety model:
  *  - Validation happens BEFORE any mutation; a failed sale changes nothing.
@@ -67,6 +97,25 @@ export function isTransactionProcessed(ref: string): boolean {
   return isSaleProcessed(ref);
 }
 
+/* ---------------- Attribution ---------------- */
+
+/**
+ * Resolve the acting identity for engine calls (spec §2): a stable id, a
+ * display name, and the operational role — stamped onto every transaction,
+ * activity entry and payment.
+ */
+export function resolveActor(actor?: Partial<Actor>): Actor {
+  return {
+    userId: actor?.userId || currentEmployeeId(),
+    name: actor?.name || currentEmployeeName(),
+    operationalRole: actor?.operationalRole ?? "employee",
+  };
+}
+
+function businessId(): string | null {
+  return getBusinessInfo().id ?? null;
+}
+
 /* ---------------- SALE_COMPLETED ---------------- */
 
 export interface SaleProcessingInput {
@@ -74,8 +123,11 @@ export interface SaleProcessingInput {
   draft: SaleDraft;
   /** Current catalog snapshot — the stock-safety source of truth. */
   catalog: Product[];
-  /** Employee completing the sale (activity/audit attribution). */
-  actor: string;
+  /**
+   * The acting identity (spec §2). Defaults to the current employee
+   * session; the operational role drives the permission gate.
+   */
+  actor?: Partial<Actor>;
   /**
    * Repository adapter: persists one product's new stock level.
    * Local stores today; a database update in the backend phase.
@@ -159,6 +211,14 @@ export async function processSaleCompleted(
   input: SaleProcessingInput,
 ): Promise<SaleProcessingResult> {
   const { draft, catalog, applyStockChange } = input;
+  const actor = resolveActor(input.actor);
+
+  // 0) Permission gate (spec §16): only actors with completeSale may sell.
+  try {
+    requireCapability(actor, "completeSale");
+  } catch (err) {
+    return permissionError(err);
+  }
 
   // 1) Validate — nothing has been mutated yet.
   const validation = validateDraft(draft, catalog);
@@ -175,6 +235,7 @@ export async function processSaleCompleted(
   markSaleProcessed(reference);
 
   // 3) Build the transaction from the SAME central calculations the UI used.
+  //    Every item keeps its frozen pricing snapshot (spec §4).
   const total = saleTotal(draft);
   const amountPaid =
     draft.paymentStatus === "paid" ? total : draft.paymentStatus === "unpaid" ? 0 : draft.amountPaid;
@@ -192,7 +253,10 @@ export async function processSaleCompleted(
     method: draft.method,
     amountPaid,
     balance: saleBalance({ ...draft, amountPaid }),
-    employeeName: input.actor || "Staff",
+    employeeName: actor.name || "Staff",
+    employeeId: actor.userId,
+    employeeRole: actor.operationalRole,
+    businessId: businessId(),
     completedAt: new Date().toISOString(),
   };
 
@@ -219,6 +283,17 @@ export async function processSaleCompleted(
   // 5) Transaction record (employee Transactions view / future reports).
   recordCompletedSale(sale);
 
+  // 5b) Payment event (spec §6): money received at sale time is event #1.
+  if (amountPaid > 0 && draft.method) {
+    recordPaymentEvent({
+      saleRef: sale.reference,
+      amount: amountPaid,
+      method: draft.method,
+      note: null,
+      recordedBy: sale.employeeName,
+    });
+  }
+
   // 6) Customer history (walk-ins never create permanent records).
   if (sale.customerId) {
     recordPurchase({
@@ -235,6 +310,30 @@ export async function processSaleCompleted(
       amountPaid: sale.amountPaid,
       balance: sale.balance,
       paymentStatus: sale.paymentStatus,
+      at: sale.completedAt,
+    });
+  }
+
+  // 6b) Follow-up automation (spec §10): rule-scheduled, idempotent.
+  scheduleFollowUpsForSale({
+    saleRef: sale.reference,
+    customerId: sale.customerId,
+    customerName: sale.customerName,
+    productSummary: sale.items
+      .map((i) => `${i.name}${i.quantity > 1 ? ` ×${i.quantity}` : ""}`)
+      .join(", "),
+    sellerName: sale.employeeName,
+    at: sale.completedAt,
+  });
+  if (sale.balance > 0) {
+    scheduleFollowUpForPendingOrder({
+      saleRef: sale.reference,
+      customerId: sale.customerId,
+      customerName: sale.customerName,
+      productSummary: sale.items
+        .map((i) => `${i.name}${i.quantity > 1 ? ` ×${i.quantity}` : ""}`)
+        .join(", "),
+      sellerName: sale.employeeName,
       at: sale.completedAt,
     });
   }
@@ -278,13 +377,110 @@ export async function processSaleCompleted(
   return { kind: "ok", sale, receipt };
 }
 
+/* ---------------- PAYMENT_RECORDED (later payments, spec §6) ---------------- */
+
+export interface PaymentInput {
+  /** The transaction to pay against. */
+  sale: CompletedSale;
+  amount: number;
+  method: PaymentMethod;
+  note?: string;
+  /** Actor override; defaults to the current employee session. */
+  actor?: Partial<Actor>;
+}
+
+export type PaymentResult =
+  | { kind: "ok"; amountPaid: number; balance: number; settled: boolean }
+  | { kind: "error"; message: string };
+
+/**
+ * Record a LATER payment against an existing transaction (the "₦600,000
+ * balance" moment in spec §6). Appends a payment event — never overwrites —
+ * updates the transaction's derived status, and completes the pending-order
+ * collection follow-up when the balance reaches zero.
+ */
+export async function recordPaymentOnSale(input: PaymentInput): Promise<PaymentResult> {
+  const actor = resolveActor(input.actor);
+
+  // Permission gate: recording payments is employee/manager work (spec §16).
+  try {
+    requireCapability(actor, "recordPayment");
+  } catch (err) {
+    return permissionError(err);
+  }
+
+  const { sale } = input;
+  const amount = Math.round(input.amount * 100) / 100;
+  if (!(amount > 0)) {
+    return { kind: "error", message: "Enter the amount the customer paid." };
+  }
+  if (sale.balance <= 0) {
+    return { kind: "error", message: "This transaction is already fully paid." };
+  }
+  if (amount > sale.balance) {
+    return {
+      kind: "error",
+      message: `The payment exceeds the outstanding balance of ${sale.balance.toLocaleString("en-US")}.`,
+    };
+  }
+
+  // 1) The payment EVENT — history preserved individually (spec §6).
+  recordPaymentEvent({
+    saleRef: sale.reference,
+    amount,
+    method: input.method,
+    note: input.note?.trim() || null,
+    recordedBy: actor.name || "Staff",
+  });
+
+  // 2) Derived totals: sale-time payment + every later event, summed.
+  const laterTotal = laterPaymentsTotal(sale.reference);
+  const totalPaid = sale.amountPaid + laterTotal;
+  const balance = Math.max(0, Math.round((sale.total - totalPaid) * 100) / 100);
+  const settled = balance <= 0;
+
+  // 3) Update the transaction record in place (amounts only — history
+  //    remains in the events; the sale row reflects the current state).
+  updateSaleFinancials(sale.reference, {
+    amountPaid: totalPaid,
+    balance,
+    paymentStatus: settled ? "paid" : "part",
+    method: sale.method ?? input.method,
+  });
+
+  // 4) Metrics: money actually received grows by this payment.
+  applyPaymentToMetrics(amount);
+
+  // 5) Activity + outstanding notification resolution.
+  recordActivity({
+    kind: "payment_recorded",
+    actor: actor.name || "Staff",
+    label: `recorded ${PAYMENT_METHOD_LABEL[input.method].toLowerCase()} payment on ${sale.reference}`,
+    saleRef: sale.reference,
+    customerId: sale.customerId ?? undefined,
+  });
+  if (settled) {
+    resolveNotification("outstanding_balance", sale.reference);
+    completePendingOrderFollowUp(sale.reference);
+  }
+
+  return { kind: "ok", amountPaid: totalPaid, balance, settled };
+}
+
+function updateSaleFinancials(
+  ref: string,
+  patch: { amountPaid: number; balance: number; paymentStatus: "paid" | "part" | "unpaid"; method: CompletedSale["method"] },
+): void {
+  updateCompletedSale(ref, patch);
+}
+
 /* ---------------- STOCK_RECEIVED ---------------- */
 
 export interface StockReceivedInput {
   product: Product;
   quantity: number;
-  /** Actor override (defaults to the current employee session name). */
-  actor?: string;
+  /** Actor override (defaults to the current employee session). */
+  actor?: Partial<Actor>;
   applyStockChange: (productId: string, newStock: number) => Promise<void> | void;
 }
 
@@ -293,13 +489,57 @@ export type StockReceivedResult =
   | { kind: "error"; message: string };
 
 /**
+ * Aggregation window key for "New Inventory Added" (spec §12): one notice
+ * per actor per clock-hour, refreshed in place instead of re-raised.
+ */
+const inventoryAggStore = createPersistentStore<{ key: string; products: number; units: number; at: string }>(
+  "bizmate.inventory-notice.v1",
+  { key: "", products: 0, units: 0, at: "" },
+);
+
+function raiseNewInventoryNotice(actorName: string, products: number, units: number): void {
+  const hourKey = `${new Date().toISOString().slice(0, 13)}:${actorName}`;
+  const agg = inventoryAggStore.get();
+  if (agg.key === hourKey) {
+    // Same actor, same hour → refresh ONE aggregate notice.
+    inventoryAggStore.set({ ...agg, products: agg.products + products, units: agg.units + units });
+    raiseNotification({
+      kind: "new_inventory",
+      severity: "info",
+      title: "New Inventory Added",
+      detail: `${actorName} · ${agg.products + products} products updated · ${agg.units + units} units registered`,
+      href: "/dashboard/employee/inventory",
+      subjectId: `inventory-${hourKey}`,
+    });
+    return;
+  }
+  inventoryAggStore.set({ key: hourKey, products, units, at: new Date().toISOString() });
+  raiseNotification({
+    kind: "new_inventory",
+    severity: "info",
+    title: "New Inventory Added",
+    detail: `${actorName} · ${products} products updated · ${units} units registered`,
+    href: "/dashboard/employee/inventory",
+    subjectId: `inventory-${hourKey}`,
+  });
+}
+
+/**
  * Process received stock: increase, activity, and re-evaluate the stock
- * condition (low → normal resolves the low-stock notification).
+ * condition (low → normal resolves the low-stock notification). Manager
+ * or employee role required (spec §16).
  */
 export async function processStockReceived(
   input: StockReceivedInput,
 ): Promise<StockReceivedResult> {
   const { product, quantity, applyStockChange } = input;
+  const actor = resolveActor(input.actor);
+
+  try {
+    requireCapability(actor, "receiveStock");
+  } catch (err) {
+    return permissionError(err);
+  }
 
   if (!product) {
     return { kind: "error", message: "Choose a product to receive stock for." };
@@ -311,7 +551,7 @@ export async function processStockReceived(
   const newStock = product.stock + quantity;
   await applyStockChange(product.id, newStock);
 
-  const actor = input.actor || currentEmployeeName();
+  const actorName = actor.name || "Staff";
   recordStockMovement({
     kind: "receive",
     productId: product.id,
@@ -319,17 +559,20 @@ export async function processStockReceived(
     quantity,
     stockBefore: product.stock,
     stockAfter: newStock,
-    actor,
+    actor: actorName,
   });
   recordActivity({
     kind: "stock_received",
-    actor,
+    actor: actorName,
     label: `received ${quantity} × ${product.name}`,
     productId: product.id,
   });
 
   // Re-evaluate: low/out conditions resolve when stock returns to normal.
   evaluateStockCondition({ ...product, stock: newStock });
+
+  // Aggregated "New Inventory Added" notice (spec §12) — info severity.
+  raiseNewInventoryNotice(actorName, 1, quantity);
 
   return { kind: "ok", newStock };
 }
@@ -353,7 +596,7 @@ export interface StockAdjustedInput {
   delta: number;
   reason: AdjustmentReason;
   note?: string;
-  actor?: string;
+  actor?: Partial<Actor>;
   applyStockChange: (productId: string, newStock: number) => Promise<void> | void;
 }
 
@@ -363,13 +606,22 @@ export type StockAdjustedResult =
 
 /**
  * Process an authorized stock adjustment (spec §15/§16): reason is REQUIRED,
- * stock can never go below zero, everything is validated before mutation,
- * and the movement lands in the ledger with full attribution.
+ * MANAGER-level only (spec §1: the manager keeps data accurate), stock can
+ * never go below zero, everything is validated before mutation, and the
+ * movement lands in the ledger with full attribution.
  */
 export async function processStockAdjusted(
   input: StockAdjustedInput,
 ): Promise<StockAdjustedResult> {
   const { product, delta, reason, note, applyStockChange } = input;
+  const actor = resolveActor(input.actor);
+
+  // Permission gate: adjustments change the books — manager/owner only.
+  try {
+    requireCapability(actor, "adjustStock");
+  } catch (err) {
+    return permissionError(err);
+  }
 
   if (!product) {
     return { kind: "error", message: "Choose a product to adjust." };
@@ -391,7 +643,7 @@ export async function processStockAdjusted(
 
   await applyStockChange(product.id, newStock);
 
-  const actor = input.actor || currentEmployeeName();
+  const actorName = actor.name || "Staff";
   const reference = `ADJ-${Date.now().toString(36).toUpperCase().slice(-6)}`;
   recordStockMovement({
     kind: "adjust",
@@ -400,14 +652,14 @@ export async function processStockAdjusted(
     quantity: delta,
     stockBefore: product.stock,
     stockAfter: newStock,
-    actor,
+    actor: actorName,
     reason,
     note: note || undefined,
     reference,
   });
   recordActivity({
     kind: "stock_adjusted",
-    actor,
+    actor: actorName,
     label: `adjusted ${product.name} by ${delta > 0 ? "+" : ""}${delta} (${reason.toLowerCase()})`,
     productId: product.id,
   });
@@ -416,4 +668,18 @@ export async function processStockAdjusted(
   evaluateStockCondition({ ...product, stock: newStock });
 
   return { kind: "ok", newStock };
+}
+
+/* ---------------- Permission errors ---------------- */
+
+function permissionError(err: unknown): { kind: "error"; message: string } {
+  if (err instanceof PermissionError) {
+    return { kind: "error", message: err.message };
+  }
+  throw err;
+}
+
+/** Payments on one sale, for views (Operations Center / receipt history). */
+export function paymentHistoryFor(saleRef: string) {
+  return paymentsForSale(saleRef);
 }

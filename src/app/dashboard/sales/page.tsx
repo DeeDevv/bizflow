@@ -6,7 +6,6 @@ import { Search, ShoppingBag, CircleDollarSign } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import {
-  formatCurrency,
   formatCurrencyPrecise,
   formatDate,
   getCustomerName,
@@ -14,6 +13,8 @@ import {
 } from "@/lib/utils";
 import { useInvoices } from "@/lib/invoices-store";
 import { useCustomers } from "@/lib/customers-store";
+import { useBusiness } from "@/lib/business-store";
+import { formatMoneyWhole } from "@/lib/currency-symbol";
 import { toSales, salesTotal } from "@/lib/sales";
 
 type DateFilter = "all" | "30d" | "90d" | "year";
@@ -28,6 +29,7 @@ const DATE_FILTERS: { value: DateFilter; label: string }[] = [
 export default function SalesPage() {
   const { invoices } = useInvoices();
   const { customers } = useCustomers();
+  const { business } = useBusiness();
   const [query, setQuery] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
 
@@ -80,7 +82,9 @@ export default function SalesPage() {
             <span className="inline-flex items-center gap-2 text-sm text-zinc-500">
               <CircleDollarSign aria-hidden className="h-4 w-4 text-brand-600" />
               Total received:{" "}
-              <span className="font-semibold text-zinc-900">{formatCurrency(total)}</span>
+              <span className="font-semibold text-zinc-900">
+                {formatMoneyWhole(total, business.currency || "NGN")}
+              </span>
             </span>
             <span className="inline-flex items-center gap-2 text-sm text-zinc-500">
               <ShoppingBag aria-hidden className="h-4 w-4 text-brand-600" />

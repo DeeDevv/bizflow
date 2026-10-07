@@ -47,3 +47,21 @@ const wholeMoney = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 export function formatMoneyWhole(value: number, code: string): string {
   return currencySymbol(code) + wholeMoney.format(value);
 }
+
+/**
+ * "₦2.45M" / "₦350K" — compact money for dense summaries (the morning
+ * update, EOD snapshot). The full figure is always one click away.
+ */
+export function formatMoneyCompact(value: number, code: string): string {
+  const sign = value < 0 ? "-" : "";
+  const abs = Math.abs(value);
+  let body: string;
+  if (abs >= 1_000_000) {
+    body = `${(abs / 1_000_000).toFixed(2).replace(/\.?0+$/, "")}M`;
+  } else if (abs >= 1_000) {
+    body = `${Math.round(abs / 1_000)}K`;
+  } else {
+    body = wholeMoney.format(abs);
+  }
+  return `${sign}${currencySymbol(code)}${body}`;
+}

@@ -173,6 +173,9 @@ export function ProductStep({
       costPrice: parsedCost === null ? null : Math.round(parsedCost * 100) / 100,
       openingStock: parsedStock,
       lowStockAt: parsedLow,
+      // Manager pricing (spec §4): setup's selling price IS the regular
+      // price; discount starts at none. The manager edits it afterwards.
+      pricing: { regularPrice: Math.round(parsedSelling * 100) / 100, discountPercent: 0 },
       warranty: {
         available: draft.warrantyAvailable,
         period: draft.warrantyPeriod.trim(),

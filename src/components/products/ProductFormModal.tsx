@@ -4,8 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { ImagePlus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useProducts } from "@/lib/products-store";
+import { productPricing, finalUnitPrice, discountPerUnit } from "@/lib/product-meta";
 import type { Product } from "@/lib/types";
 import { formatCurrencyPrecise } from "@/lib/utils";
+import { getBusinessInfo } from "@/lib/business-store";
+import { formatMoney } from "@/lib/currency-symbol";
 
 interface ProductFormModalProps {
   /** Present = edit mode; absent = add mode */
@@ -23,6 +26,34 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
   const [error, setError] = useState<string | null>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
   const lastActiveRef = useRef<HTMLElement | null>(null);
+
+  // Manager pricing (Phase 8.5, spec §4): the MANAGER sets the regular
+  // price and discount %; BizMate computes amount + final price. Existing
+  // products carry their configured pricing into the form.
+  const existingPricing = product ? productPricing(product.name) : null;
+  const [regularPrice, setRegularPrice] = useState(
+    existingPricing ? String(existingPricing.regularPrice) : product ? String(product.price) : "",
+  );
+  const [discountPercent, setDiscountPercent] = useState(
+    existingPricing && existingPricing.discountPercent > 0
+      ? String(existingPricing.discountPercent)
+      : "",
+  );
+
+  const parsedRegular = Number.parseFloat(regularPrice);
+  const parsedDiscount =
+    discountPercent.trim() === "" ? 0 : Number.parseFloat(discountPercent);
+  const discountValid =
+    discountPercent.trim() === "" ||
+    (Number.isFinite(parsedDiscount) && parsedDiscount > 0 && parsedDiscount < 100);
+  const computedFinal =
+    Number.isFinite(parsedRegular) && parsedRegular >= 0 && discountValid
+      ? finalUnitPrice(parsedRegular, parsedDiscount || 0)
+      : null;
+  const computedDiscountAmount =
+    Number.isFinite(parsedRegular) && parsedRegular >= 0 && discountValid
+      ? discountPerUnit(parsedRegular, parsedDiscount || 0)
+      : null;
 
   const isEdit = product != null;
 
@@ -75,10 +106,20 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
       setError("Please enter a valid stock quantity (0 or more).");
       return;
     }
+    // Manager pricing validation (spec §4).
+    if (!Number.isFinite(parsedRegular) || parsedRegular < 0) {
+      setError("Please enter a valid regular price.");
+      return;
+    }
+    if (!discountValid) {
+      setError("Discount must be between 0 and 100 percent.");
+      return;
+    }
 
+    const finalPrice = computedFinal ?? parsedPrice;
     const input = {
       name: trimmedName,
-      price: Math.round(parsedPrice * 100) / 100,
+      price: finalPrice,
       stock: parsedStock,
       imageUrl,
     };
@@ -90,6 +131,26 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
     if (!saved) {
       setError("Could not save — please try again in a moment.");
       return;
+    }
+    // Persist the manager pricing alongside the catalog record (keyed by
+    // name, like the other setup extras).
+    try {
+      const raw = localStorage.getItem("bizmate.setup.v1");
+      let parsed = raw ? JSON.parse(raw) : {};
+      const state = parsed.state ?? parsed;
+      state.productExtras = state.productExtras ?? {};
+      state.productExtras[trimmedName] = {
+        ...state.productExtras[trimmedName],
+        pricing: {
+          regularPrice: Math.round(parsedRegular * 100) / 100,
+          discountPercent: parsedDiscount || 0,
+        },
+      };
+      if (parsed.state) parsed.state = state;
+      else parsed = state;
+      localStorage.setItem("bizmate.setup.v1", JSON.stringify(parsed));
+    } catch {
+      // Extras persistence is best-effort; the catalog save already succeeded.
     }
     onClose();
   }
@@ -149,35 +210,97 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="product-price" className="text-sm font-medium text-zinc-700">
-                Selling price
+              <label htmlFor="product-regular-price" className="text-sm font-medium text-zinc-700">
+                Regular Price
               </label>
               <input
-                id="product-price"
+                id="product-regular-price"
                 type="number"
                 min={0}
                 step="0.01"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                value={regularPrice}
+                onChange={(e) => {
+                  setRegularPrice(e.target.value);
+                  // Keep the catalog price in step with the computed final
+                  // so existing views stay truthful.
+                  const r = Number.parseFloat(e.target.value);
+                  if (Number.isFinite(r) && r >= 0) {
+                    setPrice(String(finalUnitPrice(r, parsedDiscount || 0)));
+                  }
+                }}
                 placeholder="0.00"
                 className={`${field} tabular-nums`}
               />
             </div>
             <div>
-              <label htmlFor="product-stock" className="text-sm font-medium text-zinc-700">
-                Stock quantity
+              <label htmlFor="product-discount" className="text-sm font-medium text-zinc-700">
+                Discount % <span className="font-normal text-zinc-400">(optional)</span>
               </label>
               <input
-                id="product-stock"
+                id="product-discount"
                 type="number"
                 min={0}
-                step="1"
-                value={stock}
-                onChange={(e) => setStock(e.target.value)}
-                placeholder="0"
+                max={99.99}
+                step="0.01"
+                value={discountPercent}
+                onChange={(e) => {
+                  setDiscountPercent(e.target.value);
+                  const d = Number.parseFloat(e.target.value) || 0;
+                  if (Number.isFinite(parsedRegular) && parsedRegular >= 0) {
+                    setPrice(String(finalUnitPrice(parsedRegular, d)));
+                  }
+                }}
+                placeholder="e.g. 5"
                 className={`${field} tabular-nums`}
               />
             </div>
+          </div>
+          {computedFinal !== null && computedDiscountAmount !== null ? (
+            <div className="-mt-2 rounded-lg bg-zinc-50 px-3 py-2 text-xs">
+              {computedDiscountAmount > 0 ? (
+                <>
+                  <p className="text-zinc-500">
+                    Discount amount:{" "}
+                    <span className="font-medium tabular-nums text-amber-700">
+                      −{formatMoney(computedDiscountAmount, getBusinessInfo().currency || "NGN")}
+                    </span>{" "}
+                    per unit
+                  </p>
+                  <p className="mt-0.5 font-medium text-zinc-900">
+                    Final price:{" "}
+                    <span className="tabular-nums">
+                      {formatMoney(computedFinal, getBusinessInfo().currency || "NGN")}
+                    </span>{" "}
+                    <span className="font-normal text-zinc-400">
+                      — what employees will sell at
+                    </span>
+                  </p>
+                </>
+              ) : (
+                <p className="font-medium text-zinc-900">
+                  Final price:{" "}
+                  <span className="tabular-nums">
+                    {formatMoney(computedFinal, getBusinessInfo().currency || "NGN")}
+                  </span>
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          <div>
+            <label htmlFor="product-stock" className="text-sm font-medium text-zinc-700">
+              Stock quantity
+            </label>
+            <input
+              id="product-stock"
+              type="number"
+              min={0}
+              step="1"
+              value={stock}
+              onChange={(e) => setStock(e.target.value)}
+              placeholder="0"
+              className={`${field} tabular-nums`}
+            />
           </div>
           <p className="-mt-2 text-xs text-zinc-400">
             For a service, set stock to 0 — it shows as &ldquo;Out of stock&rdquo; but can

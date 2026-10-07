@@ -9,12 +9,14 @@ import {
   ReceiptText,
   Users,
   Settings,
+  UsersRound,
 } from "lucide-react";
 import type { NavItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const icons = {
   home: Home,
+  operations: UsersRound,
   products: Package,
   customers: Users,
   invoices: ReceiptText,

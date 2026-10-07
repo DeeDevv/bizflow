@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Bell, BellOff, ClipboardList, LogOut, Menu, PackageSearch, ReceiptText, Search, Settings as SettingsIcon, Trash2, X } from "lucide-react";
+import { Bell, BellOff, Boxes, CalendarClock, ClipboardList, LogOut, MapPin, Menu, PackageSearch, ReceiptText, Search, Settings as SettingsIcon, Trash2, X } from "lucide-react";
 import { MobileNav } from "./MobileNav";
 import { DeleteAccountDialog } from "@/components/auth/DeleteAccountDialog";
 import { useAuth } from "@/lib/auth-store";
@@ -43,8 +43,14 @@ function NotificationIcon({ n }: { n: BizMateNotification }) {
   const cls = "mt-0.5 h-4 w-4 shrink-0";
   if (n.kind === "report_ready")
     return <ClipboardList aria-hidden className={`${cls} text-brand-500`} />;
-  if (n.kind === "outstanding_balance")
+  if (n.kind === "outstanding_balance" || n.kind === "payment_partial")
     return <ReceiptText aria-hidden className={`${cls} text-amber-500`} />;
+  if (n.kind === "attendance")
+    return <MapPin aria-hidden className={`${cls} text-red-500`} />;
+  if (n.kind === "new_inventory")
+    return <Boxes aria-hidden className={`${cls} text-brand-500`} />;
+  if (n.kind === "followup")
+    return <CalendarClock aria-hidden className={`${cls} text-brand-500`} />;
   return <PackageSearch aria-hidden className={`${cls} text-brand-500`} />;
 }
 
