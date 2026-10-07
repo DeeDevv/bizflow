@@ -103,8 +103,9 @@ Rules established now:
 
 - User-facing identity: **BizMate** everywhere. No exceptions.
 - Technical identifiers that already exist in the **live database**
-  (`bizflow_anon_*`/`bizflow_owner_*` RLS policy names, migration filenames,
-  the `bizflow.business.v1` localStorage cache key) are intentionally left
+  (`bizmate_anon_*`/`bizmate_owner_*` RLS policy names, migration filenames,
+  the `bizmate.business.v1` localStorage cache key — renamed in the bizmate
+  repo migration; the old bizflow names stay untouched in the BizFlow backup)
   as-is until the new Supabase project is created — renaming them now would
   desync code from the running database. When the new project is provisioned,
   the new migrations will use `bizmate_*` naming from the start.

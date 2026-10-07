@@ -23,7 +23,13 @@ import { loadBusiness } from "./business-db";
  * the Business Setup form — no phantom business, no default USD.
  */
 
-const STORAGE_KEY = "bizflow.business.v1";
+/**
+ * Phase 8.6→bizmate migration: the app-branded localStorage cache key is now
+ * bizmate.business.v1. bizflow.business.v1 is read once as a fallback so
+ * existing devices keep working; the bizflow key is never written again.
+ */
+const STORAGE_KEY = "bizmate.business.v1";
+const LEGACY_STORAGE_KEY = "bizflow.business.v1";
 
 /** Clean slate for a first-time owner (no seed data, currency chosen at setup). */
 export const emptyBusiness: BusinessInfo = {
@@ -41,6 +47,18 @@ export const emptyBusiness: BusinessInfo = {
 const store = createPersistentStore<BusinessInfo>(STORAGE_KEY, emptyBusiness);
 
 function getSnapshot(): BusinessInfo {
+  // One-time fallback: seed the new bizmate cache from the old bizflow
+  // cache on first read. The legacy key itself is left untouched.
+  if (typeof window !== "undefined") {
+    try {
+      const legacy = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (legacy && !window.localStorage.getItem(STORAGE_KEY)) {
+        store.set(JSON.parse(legacy) as BusinessInfo);
+      }
+    } catch {
+      // Corrupt legacy data: ignore, the empty default applies.
+    }
+  }
   return store.get();
 }
 
