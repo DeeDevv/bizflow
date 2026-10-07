@@ -13,12 +13,15 @@ export type NavIcon =
   | "invoices"
   | "sales"
   | "products"
+  | "finance"
   | "settings";
 
 export interface NavItem {
   label: string;
   href: string;
   icon: NavIcon;
+  /** Phase 8.6 (spec §7): rendered only for the owner session (null role). */
+  ownerOnly?: boolean;
 }
 
 /** A customer's contact info. */

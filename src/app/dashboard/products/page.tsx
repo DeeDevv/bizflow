@@ -13,6 +13,7 @@ import { useBusiness } from "@/lib/business-store";
 import type { Product } from "@/lib/types";
 import { formatNumber, cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/currency-symbol";
+import { stockStatus, type StockStatus } from "@/lib/domain/stock-state";
 
 /** Human-friendly stock line, e.g. "12 in stock". */
 function stockLabel(stock: number): string {
@@ -20,21 +21,19 @@ function stockLabel(stock: number): string {
   return `${formatNumber(stock)} in stock`;
 }
 
-/** Visual status for the stock badge. */
-function stockTone(stock: number): "ok" | "low" | "out" {
-  if (stock <= 0) return "out";
-  if (stock <= 5) return "low";
-  return "ok";
-}
-
-const toneClasses: Record<"ok" | "low" | "out", string> = {
-  ok: "bg-emerald-50 text-emerald-700",
+/**
+ * Visual tone per stock status. Phase 8.6 (spec §2): the status itself comes
+ * from the ONE stock-state source (respects each product's own low-stock
+ * threshold) — this page only maps status → colors, no duplicated logic.
+ */
+const toneClasses: Record<StockStatus, string> = {
+  in: "bg-emerald-50 text-emerald-700",
   low: "bg-amber-50 text-amber-700",
   out: "bg-red-50 text-red-700",
 };
 
-const toneLabel: Record<"ok" | "low" | "out", string> = {
-  ok: "In stock",
+const toneLabel: Record<StockStatus, string> = {
+  in: "In stock",
   low: "Low stock",
   out: "Out of stock",
 };
@@ -198,10 +197,10 @@ export default function ProductsPage() {
                       <span
                         className={cn(
                           "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-                          toneClasses[stockTone(product.stock)],
+                          toneClasses[stockStatus(product)],
                         )}
                       >
-                        {toneLabel[stockTone(product.stock)]}
+                        {toneLabel[stockStatus(product)]}
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-right">
@@ -260,10 +259,10 @@ export default function ProductsPage() {
                   <span
                     className={cn(
                       "mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
-                      toneClasses[stockTone(product.stock)],
+                      toneClasses[stockStatus(product)],
                     )}
                   >
-                    {toneLabel[stockTone(product.stock)]}
+                    {toneLabel[stockStatus(product)]}
                   </span>
                 </div>
                 <div className="flex flex-col gap-1">

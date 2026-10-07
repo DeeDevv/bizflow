@@ -6,6 +6,7 @@ import { useEmployeeTransactions } from "../employee-transactions";
 import { useStockMovements } from "./stock-movements";
 import { useActivity } from "../activity-store";
 import { useProducts } from "../products-store";
+import { computeFinanceTotals } from "./finance";
 import { stockStatus, lowStockThreshold } from "./stock-state";
 import { productCostPrice, productCategory } from "../product-meta";
 import { getBusinessInfo } from "../business-store";
@@ -146,6 +147,20 @@ export function useInventorySnapshot(): InventorySnapshot {
   const { products } = useProducts();
 
   return useMemo(() => computeInventorySnapshot(products), [products]);
+}
+
+/**
+ * Phase 8.6 (spec §2/§6): the Command Center's inventory value now comes
+ * from the finance module's batch-cost total (receive-time cost preserved
+ * per batch), instead of the static setup cost price. The static-derived
+ * shape is kept so the EOD report and dashboard cards keep working.
+ */
+export function useLedgerInventoryValue(): { total: number } {
+  const movements = useStockMovements();
+  return useMemo(() => {
+    const totals = computeFinanceTotals(movements);
+    return { total: totals.inventoryCostValue };
+  }, [movements]);
 }
 
 /* ---------------- Today's sales preview (spec §18, §19) ---------------- */

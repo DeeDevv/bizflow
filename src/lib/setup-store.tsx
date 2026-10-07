@@ -146,6 +146,12 @@ export interface SetupState {
   productExtras: Record<string, ProductExtra>;
   /** Where work happens — Start/End Work verifies distance against this. */
   workplace: WorkplaceLocation | null;
+  /**
+   * Starting Business Capital (Phase 8.6, spec §9) — informational figure
+   * the owner enters once; displayed on the financial overview. Not money
+   * BizMate tracks movements against — no accounting is applied to it.
+   */
+  startingCapital: number | null;
   setupComplete: boolean;
 }
 
@@ -157,6 +163,7 @@ const seed: SetupState = {
   products: [],
   productExtras: {},
   workplace: null,
+  startingCapital: null,
   setupComplete: false,
 };
 
@@ -183,6 +190,10 @@ function normalizeSetup(raw: unknown): SetupState {
       workplace && typeof workplace === "object" &&
       typeof workplace.lat === "number" && typeof workplace.lng === "number"
         ? workplace
+        : null,
+    startingCapital:
+      typeof r.startingCapital === "number" && Number.isFinite(r.startingCapital)
+        ? r.startingCapital
         : null,
     setupComplete: r.setupComplete === true,
   };
@@ -218,6 +229,8 @@ interface SetupStore {
   removeProduct: (id: string) => void;
   /** Save the workplace coordinates + radius (Settings). */
   setWorkplace: (location: WorkplaceLocation | null) => void;
+  /** Save the Starting Business Capital figure (Settings, spec §9). */
+  setStartingCapital: (value: number | null) => void;
   /** Freeze product extras and mark setup complete. */
   completeSetup: () => void;
 }
@@ -296,6 +309,12 @@ export function SetupProvider({ children }: { children: React.ReactNode }) {
     store.set({ ...store.get(), workplace: location });
   }, []);
 
+  // Phase 8.6 (spec §9): informational capital, stored once, shown on the
+  // financial overview. null clears the field.
+  const setStartingCapital = useCallback((value: number | null) => {
+    store.set({ ...store.get(), startingCapital: value });
+  }, []);
+
   const completeSetup = useCallback(() => {
     const current = store.get();
     // Freeze the extended fields so they survive the products moving into
@@ -329,6 +348,7 @@ export function SetupProvider({ children }: { children: React.ReactNode }) {
       updateProduct,
       removeProduct,
       setWorkplace,
+      setStartingCapital,
       completeSetup,
     }),
     [
@@ -343,6 +363,7 @@ export function SetupProvider({ children }: { children: React.ReactNode }) {
       updateProduct,
       removeProduct,
       setWorkplace,
+      setStartingCapital,
       completeSetup,
     ],
   );

@@ -8,21 +8,34 @@ import { Card } from "@/components/ui/Card";
 import { useProducts } from "@/lib/products-store";
 import { processStockReceived } from "@/lib/domain/automation";
 import { stockStatus, stockStatusLabel } from "@/lib/domain/stock-state";
+import { actorFromSession, hasCapability } from "@/lib/domain/permissions";
 import { productCode, productBrand } from "@/lib/product-meta";
-import { currentEmployeeName } from "@/lib/employee-session";
+import {
+  currentEmployeeName,
+  useEmployeeSession,
+} from "@/lib/employee-session";
+import { formatMoneyWhole } from "@/lib/currency-symbol";
+import { getBusinessInfo } from "@/lib/business-store";
 import { StockStatusPill } from "./StockStatusPill";
 import { cn } from "@/lib/utils";
 
 /**
- * Receive Stock (Phase 5) — pick an existing product, enter the quantity
- * that arrived, confirm. The automation engine (processStockReceived) does
- * the increase, the condition re-check, and the movement ledger entry; the
- * employee never edits stock numbers by hand.
+ * Receive Stock (Phase 5, extended Phase 8.6 spec §3/§4/§14).
  *
- * Product-creation rules from Phase 2 are respected: when no product
- * matches, staff without canManageProducts are told the owner adds products;
- * none are created silently here.
+ * Simple input → automatic calculation: the manager enters Product,
+ * Quantity, Cost per unit and Selling price; BizMate shows Total Cost,
+ * Potential Sales and Potential Profit live, then records them with the
+ * batch (spec §6) through the automation engine. Pure employees still get
+ * the simple flow — cost/price inputs are only for sessions with the
+ * setPricing capability (spec §14: employees see no financial complexity).
+ *
+ * The employee never edits stock numbers by hand: one automation path
+ * (processStockReceived) does the increase, condition re-check, and the
+ * movement ledger entry.
  */
+
+const inputCls =
+  "w-full rounded-lg border border-zinc-300 bg-surface px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20";
 
 export function ReceiveStock() {
   const router = useRouter();
@@ -30,9 +43,19 @@ export function ReceiveStock() {
   const preselectId = searchParams.get("product");
 
   const { products, updateProduct, status: productsStatus } = useProducts();
+  const session = useEmployeeSession();
+  // Cost/selling inputs belong to whoever sets pricing (spec §3: the
+  // MANAGER enters them; pure employees keep the simple quantity flow).
+  const canPrice = hasCapability(
+    actorFromSession({ activeRole: session.activeRole, name: session.name }),
+    "setPricing",
+  );
+
   const [query, setQuery] = useState("");
   const [pickedId, setPickedId] = useState<string | null>(preselectId);
   const [qty, setQty] = useState(1);
+  const [costInput, setCostInput] = useState("");
+  const [priceInput, setPriceInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ name: string; added: number; newStock: number } | null>(null);
@@ -49,20 +72,36 @@ export function ReceiveStock() {
 
   const picked = products.find((p) => p.id === pickedId) ?? null;
 
+  // LIVE AUTO-CALCULATION (spec §3/§4): BizMate does all the math — the
+  // numbers update as the manager types, before anything is recorded.
+  const costPerUnit = Number(costInput.replace(/[^0-9.]/g, "")) || 0;
+  const sellingPrice = Number(priceInput.replace(/[^0-9.]/g, "")) || 0;
+  const totalCost = qty * costPerUnit;
+  const potentialSales = qty * (sellingPrice || picked?.price || 0);
+  const potentialProfit = potentialSales - totalCost;
+  const money = (v: number) => formatMoneyWhole(v, getBusinessInfo().currency || "NGN");
+
   async function confirm() {
     if (!picked || qty <= 0) return;
     setBusy(true);
     setError(null);
     // ONE automation path (Phase 4): increase, activity, movement ledger,
     // and the low/out-of-stock condition re-check all live in the engine.
+    // Phase 8.6: the batch carries its own cost + receive-time selling
+    // price, so historical cost is preserved (spec §6).
     const result = await processStockReceived({
       product: picked,
       quantity: qty,
+      ...(canPrice
+        ? { costPerUnit, sellingPrice: sellingPrice || picked.price }
+        : {}),
       actor: { name: currentEmployeeName(), operationalRole: "employee" },
       applyStockChange: async (productId, newStock) => {
+        // phase 8.6: when this session may set pricing, the selling price
+        // entered here becomes the product's current price too.
         await updateProduct(productId, {
           name: picked.name,
-          price: picked.price,
+          price: canPrice && (sellingPrice > 0 || costPerUnit > 0) ? sellingPrice || picked.price : picked.price,
           stock: newStock,
           imageUrl: picked.imageUrl,
         });
@@ -76,6 +115,8 @@ export function ReceiveStock() {
     setDone({ name: picked.name, added: qty, newStock: result.newStock });
     setPickedId(null);
     setQty(1);
+    setCostInput("");
+    setPriceInput("");
     setQuery("");
   }
 
@@ -206,7 +247,67 @@ export function ReceiveStock() {
                   After receiving: {picked.stock} → {picked.stock + qty}
                 </p>
               ) : null}
-              <div className="mt-2 flex items-center justify-between">
+
+              {/* Phase 8.6 (spec §3): cost + selling price — manager enters
+                  only these; every total below is calculated for them. */}
+              {canPrice ? (
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="text-xs font-medium text-zinc-700">Cost per unit</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={costInput}
+                      onChange={(e) => setCostInput(e.target.value.replace(/[^0-9.]/g, ""))}
+                      placeholder="0"
+                      className={cn(inputCls, "mt-1")}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-zinc-700">Selling price</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={priceInput}
+                      onChange={(e) => setPriceInput(e.target.value.replace(/[^0-9.]/g, ""))}
+                      placeholder={String(picked.price)}
+                      className={cn(inputCls, "mt-1")}
+                    />
+                  </label>
+                </div>
+              ) : null}
+
+              {/* Auto-calculated preview (spec §3/§4 — total cost, potential
+                  sales, potential profit; clearly labeled as POTENTIAL). */}
+              {canPrice && costPerUnit > 0 ? (
+                <dl className="mt-3 grid grid-cols-3 gap-2 rounded-lg border border-zinc-200 bg-surface px-3 py-2.5 text-center">
+                  <div>
+                    <dt className="text-[11px] font-medium text-zinc-500">Total Cost</dt>
+                    <dd className="text-sm font-semibold tabular-nums text-zinc-900">
+                      {money(totalCost)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-medium text-zinc-500">Potential Sales</dt>
+                    <dd className="text-sm font-semibold tabular-nums text-zinc-900">
+                      {money(potentialSales)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-medium text-zinc-500">Potential Profit</dt>
+                    <dd
+                      className={cn(
+                        "text-sm font-semibold tabular-nums",
+                        potentialProfit >= 0 ? "text-emerald-700" : "text-red-700",
+                      )}
+                    >
+                      {money(potentialProfit)}
+                    </dd>
+                  </div>
+                </dl>
+              ) : null}
+
+              <div className="mt-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <button
                     type="button"

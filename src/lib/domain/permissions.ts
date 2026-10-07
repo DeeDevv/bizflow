@@ -43,6 +43,10 @@ export type Capability =
   | "viewTeamActivity"
   | "viewAttendance"
   | "viewCostPrices"
+  /** Phase 8.6 (spec §7): owner-only financial visibility — costs, profits,
+   * the financial overview. Deliberately NOT manager/employee: cost and
+   * profit stay private to the business owner. */
+  | "viewProfits"
   // Manager (and above)
   | "manageProducts"
   | "setPricing"
@@ -65,6 +69,7 @@ const MATRIX: Record<OperationalRole, Capability[]> = {
     "viewTeamActivity",
     "viewAttendance",
     "viewCostPrices",
+    "viewProfits",
     "viewCustomers",
     "viewAlerts",
   ],
@@ -194,4 +199,29 @@ export function hasLegacyCapability(
   const capability = mapped[legacy];
   if (capability === null) return false;
   return hasCapability(actor, capability);
+}
+
+/* ------------------------------------------------------------------ */
+/* Phase 8.6 (spec §7): owner-only financial visibility.               */
+/*                                                                     */
+/* The financial overview route guards with THIS, not with UI hiding:  */
+/* cost/profit figures stay invisible to managers and employees even   */
+/* via direct routes or manipulated client state.                      */
+/* ------------------------------------------------------------------ */
+
+export function canViewFinancials(session: {
+  activeRole: EmployeeRole | null;
+}): boolean {
+  const role = session.activeRole;
+  // null session = owner preview; a manager job role keeps the manager's
+  // existing viewCostPrices shim (legacy screens) but never viewProfits.
+  return role === null;
+}
+
+/**
+ * Engine/actor variant of the §7 guard: owner operational role only.
+ * Managers hold viewCostPrices (existing screens) but NOT viewProfits.
+ */
+export function actorCanViewFinancials(actor: Actor | null): boolean {
+  return hasCapability(actor, "viewProfits");
 }

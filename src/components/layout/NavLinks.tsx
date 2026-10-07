@@ -10,8 +10,10 @@ import {
   Users,
   Settings,
   UsersRound,
+  Wallet,
 } from "lucide-react";
 import type { NavItem } from "@/lib/types";
+import { useEmployeeSession } from "@/lib/employee-session";
 import { cn } from "@/lib/utils";
 
 const icons = {
@@ -21,15 +23,23 @@ const icons = {
   customers: Users,
   invoices: ReceiptText,
   sales: BarChart3,
+  finance: Wallet,
   settings: Settings,
 } as const;
 
 export function NavLinks({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
+  // Phase 8.6 (spec §7): owner-only items (Financials) are not merely
+  // greyed out for staff — they never render, so cost/profit stay out of
+  // every non-owner UI surface.
+  const session = useEmployeeSession();
+  const visible = items.filter(
+    (item) => !item.ownerOnly || session.activeRole === null,
+  );
 
   return (
     <nav className="flex flex-col gap-1" aria-label="Main">
-      {items.map((item) => {
+      {visible.map((item) => {
         const Icon = icons[item.icon];
         const active =
           item.href === "/dashboard"

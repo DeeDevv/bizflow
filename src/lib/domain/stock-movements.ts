@@ -37,6 +37,21 @@ export interface StockMovement {
   reference?: string;
   /** ISO timestamp. */
   at: string;
+  /**
+   * COST BASIS (Phase 8.6, spec §6): the per-unit cost of this batch for
+   * "receive" movements. Each receipt remembers its own cost — January's
+   * ₦320,000 stock never silently becomes March's ₦350,000 (spec §6).
+   * Sales consume from the oldest batches first; the finance module
+   * converts sale batches into COGS from this ledger. null = no cost was
+   * entered (legacy rows / $0 items); treated as zero cost, not hidden.
+   */
+  unitCost?: number | null;
+  /**
+   * For "sale" movements: the actual selling price charged per unit in the
+   * linked transaction (spec §5's actual-sale calculations read revenue
+   * from here rather than re-deriving it from the transaction store).
+   */
+  unitPrice?: number | null;
 }
 
 const store = createPersistentStore<StockMovement[]>("bizmate.stock-movements.v1", []);

@@ -263,9 +263,9 @@ export async function processSaleCompleted(
   // 4) Inventory: deduct every item (multi-product safe, stock-checked).
   const stockUpdates = draft.items.map((item) => {
     const product = catalog.find((p) => p.id === item.productId)!;
-    return { product, quantity: item.quantity, newStock: product.stock - item.quantity };
+    return { item, product, quantity: item.quantity, newStock: product.stock - item.quantity };
   });
-  for (const { product, quantity, newStock } of stockUpdates) {
+  for (const { item, product, quantity, newStock } of stockUpdates) {
     await applyStockChange(product.id, newStock);
     // Movement ledger: traceable stock trail (sale → reference).
     recordStockMovement({
@@ -277,6 +277,10 @@ export async function processSaleCompleted(
       stockAfter: newStock,
       actor: sale.employeeName,
       reference: sale.reference,
+      // Phase 8.6: the price actually charged for this unit, so revenue and
+      // gross profit come straight from the ledger (spec §5) — including
+      // per-item discounts already folded into item.unitPrice.
+      unitPrice: item.unitPrice,
     });
   }
 
@@ -479,6 +483,16 @@ function updateSaleFinancials(
 export interface StockReceivedInput {
   product: Product;
   quantity: number;
+  /**
+   * COST BASIS (Phase 8.6, spec §3/§6): cost per unit of this batch. Each
+   * receipt remembers its own cost — the finance module uses it for FIFO
+   * COGS and inventory value. Optional only so old callers keep compiling;
+   * the phase-8.6 Receive Stock screen always provides it.
+   */
+  costPerUnit?: number;
+  /** Selling price recorded at receive time (spec §3/§4) — drives potential
+   * sales/profit and the ledger-price fallback. */
+  sellingPrice?: number;
   /** Actor override (defaults to the current employee session). */
   actor?: Partial<Actor>;
   applyStockChange: (productId: string, newStock: number) => Promise<void> | void;
@@ -547,6 +561,14 @@ export async function processStockReceived(
   if (!Number.isInteger(quantity) || quantity <= 0) {
     return { kind: "error", message: "Enter the quantity received (at least 1)." };
   }
+  // Phase 8.6 (spec §3): when provided, cost/selling inputs must be valid
+  // numbers — the manager types them, BizMate does the math.
+  if (input.costPerUnit !== undefined && (!Number.isFinite(input.costPerUnit) || input.costPerUnit < 0)) {
+    return { kind: "error", message: "Cost per unit cannot be negative." };
+  }
+  if (input.sellingPrice !== undefined && (!Number.isFinite(input.sellingPrice) || input.sellingPrice < 0)) {
+    return { kind: "error", message: "Selling price cannot be negative." };
+  }
 
   const newStock = product.stock + quantity;
   await applyStockChange(product.id, newStock);
@@ -560,6 +582,10 @@ export async function processStockReceived(
     stockBefore: product.stock,
     stockAfter: newStock,
     actor: actorName,
+    // Phase 8.6: preserve this batch's own cost and receive-time selling
+    // price so historical cost never drifts with later price edits (§6).
+    unitCost: input.costPerUnit,
+    unitPrice: input.sellingPrice,
   });
   recordActivity({
     kind: "stock_received",
@@ -645,6 +671,7 @@ export async function processStockAdjusted(
 
   const actorName = actor.name || "Staff";
   const reference = `ADJ-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+  // Phase 8.6: no cost/price on adjustments — corrections are not trade.
   recordStockMovement({
     kind: "adjust",
     productId: product.id,

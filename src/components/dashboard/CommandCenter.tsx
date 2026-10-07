@@ -13,6 +13,7 @@ import {
   PackageSearch,
   ReceiptText,
   ShoppingBasket,
+  TrendingUp,
   UserPlus,
   Users,
   Wallet,
@@ -34,7 +35,9 @@ import {
   useTodaySalesPreview,
   useObservations,
   useTeamActivity,
+  useLedgerInventoryValue,
 } from "@/lib/domain/owner-overview";
+import { useFinanceTotals } from "@/lib/domain/finance";
 import {
   useDailyBusinessUpdate,
   useReportReadyNotification,
@@ -331,8 +334,12 @@ function KpiCard({
 
 function KpiGrid() {
   const kpis = useTodayKpis();
+  // Phase 8.6 (spec §7/§11): owner-level gross profit on the Command Center
+  // — the same finance-module calculation the Financials page uses, so the
+  // two surfaces can never disagree.
+  const totals = useFinanceTotals();
 
-  if (!kpis.hasData) {
+  if (!kpis.hasData && totals.revenue === 0) {
     return (
       <Card className="px-5 py-6 text-center">
         <p className="text-sm font-medium text-zinc-900">No sales recorded yet</p>
@@ -370,6 +377,12 @@ function KpiGrid() {
         value={String(kpis.transactions)}
         context="Today"
         icon={ReceiptText}
+      />
+      <KpiCard
+        label="Gross Profit"
+        value={money(totals.grossProfit)}
+        context="From all completed sales"
+        icon={TrendingUp}
       />
     </div>
   );
@@ -467,15 +480,18 @@ function NeedsAttention() {
 
 function InventorySnapshotCard() {
   const snapshot = useInventorySnapshot();
+  // Phase 8.6 (spec §2/§6): value at batch cost from the finance module —
+  // the same figure the Financials page shows, always in agreement.
+  const ledgerValue = useLedgerInventoryValue();
 
   const valueLine =
-    snapshot.value === null
+    snapshot.totalProducts === 0
       ? null
       : {
-          text: `Inventory value at cost: ${money(snapshot.value.total)}`,
+          text: `Inventory value at cost: ${money(ledgerValue.total)}`,
           caveat:
-            snapshot.value.missing > 0
-              ? `${snapshot.value.missing} ${snapshot.value.missing === 1 ? "product has" : "products have"} no cost price, so this is incomplete.`
+            snapshot.value === null || snapshot.value.missing > 0
+              ? "Based on recorded stock receipts — products without a recorded cost count as zero."
               : null,
         };
 

@@ -64,7 +64,7 @@ function Toggle({
 
 export default function BusinessSettingsPage() {
   const { business, updateBusiness } = useBusiness();
-  const { setup, setWorkplace } = useSetup();
+  const { setup, setWorkplace, setStartingCapital } = useSetup();
 
   // Workplace Attendance Verification (Phase 8.5, spec §3): the owner
   // registers WHERE work happens, and how far "at work" may be.
@@ -100,6 +100,12 @@ export default function BusinessSettingsPage() {
   const [currency, setCurrency] = useState(business.currency);
   const [logoUrl, setLogoUrl] = useState(business.logoUrl);
   const [discountsEnabled, setDiscountsEnabled] = useState(business.discountsEnabled);
+
+  // Starting Business Capital (Phase 8.6, spec §9): informational figure
+  // saved with the setup store; the financial overview reads it from there.
+  const [capitalInput, setCapitalInput] = useState(
+    setup.startingCapital === null ? "" : String(setup.startingCapital),
+  );
 
   // Business Website: the Yes/No answer, the editable URL field, and the URL
   // currently connected (shown as the read-only link until edited/removed).
@@ -204,6 +210,11 @@ export default function BusinessSettingsPage() {
 
     dirtyRef.current = true;
     const result = await saveBusiness(input);
+
+    // Starting Business Capital (Phase 8.6, spec §9): parse the typed
+    // figure and persist via the setup store alongside the other settings.
+    const capitalDigits = capitalInput.replace(/[^0-9]/g, "");
+    setStartingCapital(capitalDigits ? Number(capitalDigits) : null);
 
     // Keep the app working instantly either way; the database is the
     // durable copy. Errors are reported without blocking the form.
@@ -607,6 +618,37 @@ export default function BusinessSettingsPage() {
               checked={discountsEnabled}
               onChange={setDiscountsEnabled}
               label="Enable discounts"
+            />
+          </div>
+        </Card>
+
+        {/* Starting Business Capital (Phase 8.6, spec §9) — informational.
+            Saved via the setup store; the financial overview reads it. */}
+        <Card className="p-5 sm:p-6">
+          <h2 className="text-sm font-semibold text-zinc-900">
+            Starting Business Capital
+          </h2>
+          <div className="mt-3 flex items-start justify-between gap-4">
+            <div>
+              <p className="mt-1 max-w-md text-sm leading-6 text-zinc-500">
+                The money you started the business with. BizMate shows it on the
+                financial overview next to your stock value, sales and profit — it is
+                never changed automatically.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 max-w-xs">
+            <label htmlFor="starting-capital" className="text-sm font-medium text-zinc-700">
+              Starting capital ({currency || "NGN"})
+            </label>
+            <input
+              id="starting-capital"
+              type="text"
+              inputMode="decimal"
+              value={capitalInput}
+              onChange={(e) => setCapitalInput(e.target.value.replace(/[^0-9.,]/g, ""))}
+              placeholder="e.g. 10000000"
+              className={field}
             />
           </div>
         </Card>
